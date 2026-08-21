@@ -135,6 +135,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       ...state,
+      hydrated,
+      signIn: (user) => update({ user }),
+      signOut: () => {
+        try {
+          localStorage.removeItem(KEY);
+        } catch {
+          /* ignore */
+        }
+        setState(DEFAULT);
+      },
       setArena: (arena) => update({ arena, tier: null, position: null, locked: false }),
       setTier: (tier) => update({ tier }),
       openPosition: (position) => update({ position }),
@@ -154,10 +164,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }),
       resetSession: () => {
         localStorage.removeItem(KEY);
-        setState(DEFAULT);
+        setState({ ...DEFAULT, user: state.user });
       },
     }),
-    [state, update],
+    [state, hydrated, update],
+
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
