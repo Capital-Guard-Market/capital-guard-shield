@@ -65,7 +65,10 @@ export type Position = {
   entry: number;
 };
 
+export type User = { name: string; email: string; avatar: string; method: "google" | "phone" };
+
 type SessionState = {
+  user: User | null;
   arena: ArenaId | null;
   tier: TierId | null;
   position: Position | null;
@@ -76,6 +79,7 @@ type SessionState = {
 };
 
 const DEFAULT: SessionState = {
+  user: null,
   arena: null,
   tier: null,
   position: null,
@@ -88,6 +92,9 @@ const DEFAULT: SessionState = {
 const KEY = "capitalguard.session.v1";
 
 type Ctx = SessionState & {
+  hydrated: boolean;
+  signIn: (u: User) => void;
+  signOut: () => void;
   setArena: (a: ArenaId) => void;
   setTier: (t: TierId) => void;
   openPosition: (p: Position) => void;
@@ -100,6 +107,7 @@ const SessionContext = createContext<Ctx | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>(DEFAULT);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
@@ -108,7 +116,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+    setHydrated(true);
   }, []);
+
 
   const update = useCallback((patch: Partial<SessionState>) => {
     setState((prev) => {
