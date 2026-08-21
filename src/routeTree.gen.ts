@@ -11,7 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArenaRouteImport } from './routes/arena'
+import { Route as PositionRouteImport } from './routes/position'
 import { Route as RiskGateRouteImport } from './routes/risk-gate'
+import { Route as ShieldRouteImport } from './routes/shield'
+import { Route as TerminalRouteImport } from './routes/terminal'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,40 +26,75 @@ const ArenaRoute = ArenaRouteImport.update({
   path: '/arena',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PositionRoute = PositionRouteImport.update({
+  id: '/position',
+  path: '/position',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RiskGateRoute = RiskGateRouteImport.update({
   id: '/risk-gate',
   path: '/risk-gate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShieldRoute = ShieldRouteImport.update({
+  id: '/shield',
+  path: '/shield',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminalRoute = TerminalRouteImport.update({
+  id: '/terminal',
+  path: '/terminal',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
+  '/position': typeof PositionRoute
   '/risk-gate': typeof RiskGateRoute
+  '/shield': typeof ShieldRoute
+  '/terminal': typeof TerminalRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
+  '/position': typeof PositionRoute
   '/risk-gate': typeof RiskGateRoute
+  '/shield': typeof ShieldRoute
+  '/terminal': typeof TerminalRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
+  '/position': typeof PositionRoute
   '/risk-gate': typeof RiskGateRoute
+  '/shield': typeof ShieldRoute
+  '/terminal': typeof TerminalRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/arena' | '/risk-gate'
+  fullPaths:
+    '/' | '/arena' | '/position' | '/risk-gate' | '/shield' | '/terminal'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/arena' | '/risk-gate'
-  id: '__root__' | '/' | '/arena' | '/risk-gate'
+  to: '/' | '/arena' | '/position' | '/risk-gate' | '/shield' | '/terminal'
+  id:
+    | '__root__'
+    | '/'
+    | '/arena'
+    | '/position'
+    | '/risk-gate'
+    | '/shield'
+    | '/terminal'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArenaRoute: typeof ArenaRoute
+  PositionRoute: typeof PositionRoute
   RiskGateRoute: typeof RiskGateRoute
+  ShieldRoute: typeof ShieldRoute
+  TerminalRoute: typeof TerminalRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -75,11 +113,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArenaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/position': {
+      id: '/position'
+      path: '/position'
+      fullPath: '/position'
+      preLoaderRoute: typeof PositionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/risk-gate': {
       id: '/risk-gate'
       path: '/risk-gate'
       fullPath: '/risk-gate'
       preLoaderRoute: typeof RiskGateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shield': {
+      id: '/shield'
+      path: '/shield'
+      fullPath: '/shield'
+      preLoaderRoute: typeof ShieldRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminal': {
+      id: '/terminal'
+      path: '/terminal'
+      fullPath: '/terminal'
+      preLoaderRoute: typeof TerminalRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -88,7 +147,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArenaRoute: ArenaRoute,
+  PositionRoute: PositionRoute,
   RiskGateRoute: RiskGateRoute,
+  ShieldRoute: ShieldRoute,
+  TerminalRoute: TerminalRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
