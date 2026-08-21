@@ -10,33 +10,154 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ArenaRouteImport } from './routes/arena'
+import { Route as EquityRouteImport } from './routes/equity'
+import { Route as JournalRouteImport } from './routes/journal'
+import { Route as PositionRouteImport } from './routes/position'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as RiskGateRouteImport } from './routes/risk-gate'
+import { Route as ShieldRouteImport } from './routes/shield'
+import { Route as TerminalRouteImport } from './routes/terminal'
+import { Route as WatchlistRouteImport } from './routes/watchlist'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArenaRoute = ArenaRouteImport.update({
+  id: '/arena',
+  path: '/arena',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EquityRoute = EquityRouteImport.update({
+  id: '/equity',
+  path: '/equity',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JournalRoute = JournalRouteImport.update({
+  id: '/journal',
+  path: '/journal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PositionRoute = PositionRouteImport.update({
+  id: '/position',
+  path: '/position',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RiskGateRoute = RiskGateRouteImport.update({
+  id: '/risk-gate',
+  path: '/risk-gate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShieldRoute = ShieldRouteImport.update({
+  id: '/shield',
+  path: '/shield',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminalRoute = TerminalRouteImport.update({
+  id: '/terminal',
+  path: '/terminal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WatchlistRoute = WatchlistRouteImport.update({
+  id: '/watchlist',
+  path: '/watchlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/arena': typeof ArenaRoute
+  '/equity': typeof EquityRoute
+  '/journal': typeof JournalRoute
+  '/position': typeof PositionRoute
+  '/profile': typeof ProfileRoute
+  '/risk-gate': typeof RiskGateRoute
+  '/shield': typeof ShieldRoute
+  '/terminal': typeof TerminalRoute
+  '/watchlist': typeof WatchlistRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/arena': typeof ArenaRoute
+  '/equity': typeof EquityRoute
+  '/journal': typeof JournalRoute
+  '/position': typeof PositionRoute
+  '/profile': typeof ProfileRoute
+  '/risk-gate': typeof RiskGateRoute
+  '/shield': typeof ShieldRoute
+  '/terminal': typeof TerminalRoute
+  '/watchlist': typeof WatchlistRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/arena': typeof ArenaRoute
+  '/equity': typeof EquityRoute
+  '/journal': typeof JournalRoute
+  '/position': typeof PositionRoute
+  '/profile': typeof ProfileRoute
+  '/risk-gate': typeof RiskGateRoute
+  '/shield': typeof ShieldRoute
+  '/terminal': typeof TerminalRoute
+  '/watchlist': typeof WatchlistRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/arena'
+    | '/equity'
+    | '/journal'
+    | '/position'
+    | '/profile'
+    | '/risk-gate'
+    | '/shield'
+    | '/terminal'
+    | '/watchlist'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/arena'
+    | '/equity'
+    | '/journal'
+    | '/position'
+    | '/profile'
+    | '/risk-gate'
+    | '/shield'
+    | '/terminal'
+    | '/watchlist'
+  id:
+    | '__root__'
+    | '/'
+    | '/arena'
+    | '/equity'
+    | '/journal'
+    | '/position'
+    | '/profile'
+    | '/risk-gate'
+    | '/shield'
+    | '/terminal'
+    | '/watchlist'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ArenaRoute: typeof ArenaRoute
+  EquityRoute: typeof EquityRoute
+  JournalRoute: typeof JournalRoute
+  PositionRoute: typeof PositionRoute
+  ProfileRoute: typeof ProfileRoute
+  RiskGateRoute: typeof RiskGateRoute
+  ShieldRoute: typeof ShieldRoute
+  TerminalRoute: typeof TerminalRoute
+  WatchlistRoute: typeof WatchlistRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +169,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/arena': {
+      id: '/arena'
+      path: '/arena'
+      fullPath: '/arena'
+      preLoaderRoute: typeof ArenaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/equity': {
+      id: '/equity'
+      path: '/equity'
+      fullPath: '/equity'
+      preLoaderRoute: typeof EquityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/journal': {
+      id: '/journal'
+      path: '/journal'
+      fullPath: '/journal'
+      preLoaderRoute: typeof JournalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/position': {
+      id: '/position'
+      path: '/position'
+      fullPath: '/position'
+      preLoaderRoute: typeof PositionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/risk-gate': {
+      id: '/risk-gate'
+      path: '/risk-gate'
+      fullPath: '/risk-gate'
+      preLoaderRoute: typeof RiskGateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shield': {
+      id: '/shield'
+      path: '/shield'
+      fullPath: '/shield'
+      preLoaderRoute: typeof ShieldRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminal': {
+      id: '/terminal'
+      path: '/terminal'
+      fullPath: '/terminal'
+      preLoaderRoute: typeof TerminalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/watchlist': {
+      id: '/watchlist'
+      path: '/watchlist'
+      fullPath: '/watchlist'
+      preLoaderRoute: typeof WatchlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ArenaRoute: ArenaRoute,
+  EquityRoute: EquityRoute,
+  JournalRoute: JournalRoute,
+  PositionRoute: PositionRoute,
+  ProfileRoute: ProfileRoute,
+  RiskGateRoute: RiskGateRoute,
+  ShieldRoute: ShieldRoute,
+  TerminalRoute: TerminalRoute,
+  WatchlistRoute: WatchlistRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
