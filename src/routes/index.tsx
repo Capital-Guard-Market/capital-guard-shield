@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, CandlestickChart, TrendingUp } from "lucide-react";
+import { ArrowRight, ShieldHalf, TrendingUp } from "lucide-react";
 import { useSession, inr } from "@/lib/session";
 
 export const Route = createFileRoute("/")({
@@ -27,10 +27,8 @@ function Home() {
   return (
     <div className="space-y-6">
       <section>
-        <h1 className="text-2xl font-semibold tracking-tight">Practice with consequences</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every session is gated by a loss limit. Break it, and the Shield takes the day.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">CapitalGuard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">What are you here to do today?</p>
       </section>
 
       {locked && (
@@ -50,10 +48,11 @@ function Home() {
           <TrendingUp className="size-6 text-primary" />
           <h2 className="mt-4 text-lg font-semibold">Equity Investments</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track a stock's trajectory over time. Slow, positional, no lockouts.
+            The pure watchlist experience — track stocks from the moment you get interested, see
+            exactly what they&apos;ve done since.
           </p>
           <span className="mt-4 inline-flex items-center gap-1 text-sm text-primary">
-            Open <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+            Open watchlist <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
           </span>
         </Link>
 
@@ -61,10 +60,11 @@ function Home() {
           to="/arena"
           className="group rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/50"
         >
-          <CandlestickChart className="size-6 text-warning" />
+          <ShieldHalf className="size-6 text-warning" />
           <h2 className="mt-4 text-lg font-semibold">F&amp;O Trading</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Live simulation with daily risk limits and a hard shield lockout.
+            Practice options &amp; futures with real consequences. Wallets, Daily Risk Gate, live
+            terminal, and discipline mechanics.
           </p>
           <span className="mt-4 inline-flex items-center gap-1 text-sm text-primary">
             Choose arena{" "}
@@ -72,6 +72,10 @@ function Home() {
           </span>
         </Link>
       </div>
+
+      <p className="text-center text-xs text-muted-foreground">
+        You can switch between Equity and F&amp;O anytime from your top navigation / profile.
+      </p>
 
       <div className="rounded-2xl border border-border bg-card p-5">
         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Ghost Debt</p>

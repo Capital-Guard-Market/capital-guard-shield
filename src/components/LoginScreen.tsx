@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldHalf } from "lucide-react";
 import { useSession } from "@/lib/session";
@@ -27,6 +28,11 @@ function GoogleIcon() {
 
 export function LoginScreen() {
   const { signIn } = useSession();
+  const navigate = useNavigate();
+  const enter = (u: Parameters<ReturnType<typeof useSession>["signIn"]>[0]) => {
+    signIn(u);
+    void navigate({ to: "/" });
+  };
   const [phone, setPhone] = useState("");
 
   return (
@@ -40,7 +46,7 @@ export function LoginScreen() {
 
         <button
           onClick={() =>
-            signIn({
+            enter({
               name: "Sai Deekshit",
               email: "sai.deekshit@gmail.com",
               avatar: "SD",
@@ -73,7 +79,7 @@ export function LoginScreen() {
           </div>
           <button
             onClick={() =>
-              signIn({
+              enter({
                 name: phone ? `+91 ${phone}` : "Guest Trader",
                 email: phone ? `+91${phone}` : "guest@capitalguard.app",
                 avatar: "CG",
