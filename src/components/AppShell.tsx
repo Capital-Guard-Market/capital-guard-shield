@@ -45,6 +45,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           )}
 
+          <Link
+            to="/profile"
+            aria-label="Your profile"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-primary"
+          >
+            <User className="size-4" />
+          </Link>
+
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Account menu"
