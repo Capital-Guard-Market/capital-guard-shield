@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArenaRouteImport } from './routes/arena'
+import { Route as BrokerRouteImport } from './routes/broker'
 import { Route as EquityRouteImport } from './routes/equity'
 import { Route as JournalRouteImport } from './routes/journal'
 import { Route as PositionRouteImport } from './routes/position'
@@ -28,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const ArenaRoute = ArenaRouteImport.update({
   id: '/arena',
   path: '/arena',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrokerRoute = BrokerRouteImport.update({
+  id: '/broker',
+  path: '/broker',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EquityRoute = EquityRouteImport.update({
@@ -74,6 +80,7 @@ const WatchlistRoute = WatchlistRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
+  '/broker': typeof BrokerRoute
   '/equity': typeof EquityRoute
   '/journal': typeof JournalRoute
   '/position': typeof PositionRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
+  '/broker': typeof BrokerRoute
   '/equity': typeof EquityRoute
   '/journal': typeof JournalRoute
   '/position': typeof PositionRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
+  '/broker': typeof BrokerRoute
   '/equity': typeof EquityRoute
   '/journal': typeof JournalRoute
   '/position': typeof PositionRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/arena'
+    | '/broker'
     | '/equity'
     | '/journal'
     | '/position'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/arena'
+    | '/broker'
     | '/equity'
     | '/journal'
     | '/position'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/arena'
+    | '/broker'
     | '/equity'
     | '/journal'
     | '/position'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArenaRoute: typeof ArenaRoute
+  BrokerRoute: typeof BrokerRoute
   EquityRoute: typeof EquityRoute
   JournalRoute: typeof JournalRoute
   PositionRoute: typeof PositionRoute
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/arena'
       fullPath: '/arena'
       preLoaderRoute: typeof ArenaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/broker': {
+      id: '/broker'
+      path: '/broker'
+      fullPath: '/broker'
+      preLoaderRoute: typeof BrokerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/equity': {
@@ -238,6 +258,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArenaRoute: ArenaRoute,
+  BrokerRoute: BrokerRoute,
   EquityRoute: EquityRoute,
   JournalRoute: JournalRoute,
   PositionRoute: PositionRoute,
