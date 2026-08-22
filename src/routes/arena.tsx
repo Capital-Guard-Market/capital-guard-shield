@@ -1,4 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { ARENAS, inr, useSession, type ArenaId } from "@/lib/session";
 
 export const Route = createFileRoute("/arena")({
@@ -30,10 +31,20 @@ function ArenaPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Step 1 of 3</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Choose your arena</h1>
+      <div className="flex items-center gap-3">
+        <Link
+          to="/broker"
+          aria-label="Back"
+          className="flex size-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="size-4" />
+        </Link>
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Step 2 of 4</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Choose Arena</h1>
+        </div>
       </div>
+      <p className="text-sm text-muted-foreground">Pick which arena to trade in.</p>
 
       <div className="space-y-4">
         {Object.values(ARENAS).map((a) => (
@@ -50,6 +61,10 @@ function ArenaPage() {
           </button>
         ))}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Zero cross-contamination: Profit/loss in one arena never touches the other.
+      </p>
     </div>
   );
 }
