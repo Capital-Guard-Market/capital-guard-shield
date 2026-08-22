@@ -29,7 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto grid h-14 max-w-3xl grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4">
+        <div className="mx-auto grid h-14 max-w-3xl grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-4">
           <Link to="/" className="flex min-w-0 items-center gap-2">
             <ShieldHalf className="size-5 shrink-0 text-primary" />
             <span className="truncate text-sm font-semibold tracking-tight">CapitalGuard</span>
