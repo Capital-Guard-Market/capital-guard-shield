@@ -31,30 +31,34 @@ export const ARENAS: Record<
 
 export const TIERS: Record<
   TierId,
-  { id: TierId; name: string; pct: number; maxLoss: number; note: string }
+  { id: TierId; name: string; pct: number; note: string }
 > = {
   conservative: {
     id: "conservative",
     name: "Conservative",
     pct: 5,
-    maxLoss: 5000,
     note: "Shield triggers fast. Best for rebuilding discipline.",
   },
   balanced: {
     id: "balanced",
     name: "Balanced",
     pct: 10,
-    maxLoss: 10000,
     note: "Room for two bad trades before the day ends.",
   },
   aggressive: {
     id: "aggressive",
     name: "Aggressive",
     pct: 20,
-    maxLoss: 20000,
     note: "High rope. Ghost Debt grows faster on breaches.",
   },
 };
+
+/** Rupee ceiling derived from the active arena balance and the chosen tier. */
+export function maxLossFor(arena: ArenaId | null, tier: TierId | null) {
+  const balance = ARENAS[arena ?? "options"].balance;
+  const pct = TIERS[tier ?? "balanced"].pct;
+  return Math.round((balance * pct) / 100);
+}
 
 export type Position = {
   symbol: string;
@@ -63,6 +67,19 @@ export type Position = {
   side: "BUY" | "SELL";
   qty: number;
   entry: number;
+  sl: number | null;
+  target: number | null;
+};
+
+export type TradeSummary = {
+  symbol: string;
+  strike: number;
+  type: "CE" | "PE";
+  qty: number;
+  entry: number;
+  exit: number;
+  pnl: number;
+  reason: "manual" | "sl" | "target" | "shield";
 };
 
 export type User = { name: string; email: string; avatar: string; method: "google" | "phone" };
@@ -72,6 +89,7 @@ type SessionState = {
   arena: ArenaId | null;
   tier: TierId | null;
   position: Position | null;
+  lastTrade: TradeSummary | null;
   locked: boolean;
   capitalSaved: number;
   realized: number;
@@ -83,6 +101,7 @@ const DEFAULT: SessionState = {
   arena: null,
   tier: null,
   position: null,
+  lastTrade: null,
   locked: false,
   capitalSaved: 0,
   realized: 0,
@@ -93,12 +112,17 @@ const KEY = "capitalguard.session.v1";
 
 type Ctx = SessionState & {
   hydrated: boolean;
+  maxLoss: number;
+  balance: number;
+  usedMargin: number;
+  availableMargin: number;
   signIn: (u: User) => void;
   signOut: () => void;
   setArena: (a: ArenaId) => void;
   setTier: (t: TierId) => void;
   openPosition: (p: Position) => void;
-  exitPosition: (pnl: number) => void;
+  closePosition: (exitPrice: number, reason: TradeSummary["reason"]) => TradeSummary;
+  clearLastTrade: () => void;
   triggerShield: (saved: number, loss: number) => void;
   resetSession: () => void;
 };
@@ -119,7 +143,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
-
   const update = useCallback((patch: Partial<SessionState>) => {
     setState((prev) => {
       const next = { ...prev, ...patch };
@@ -132,10 +155,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const value = useMemo<Ctx>(
-    () => ({
+  const value = useMemo<Ctx>(() => {
+    const maxLoss = maxLossFor(state.arena, state.tier);
+    const balance = ARENAS[state.arena ?? "options"].balance;
+    const usedMargin = state.position ? state.position.qty * state.position.entry : 0;
+    const equity = balance + state.realized;
+
+    return {
       ...state,
       hydrated,
+      maxLoss,
+      balance,
+      usedMargin,
+      availableMargin: equity - usedMargin,
       signIn: (user) => update({ user }),
       signOut: () => {
         try {
@@ -145,15 +177,53 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
         setState(DEFAULT);
       },
-      setArena: (arena) => update({ arena, tier: null, position: null, locked: false }),
+      setArena: (arena) =>
+        update({ arena, tier: null, position: null, locked: false, realized: 0, lastTrade: null }),
       setTier: (tier) => update({ tier }),
-      openPosition: (position) => update({ position }),
-      exitPosition: (pnl) =>
+      openPosition: (position) => update({ position, lastTrade: null }),
+      closePosition: (exitPrice, reason) => {
+        const p = state.position;
+        const summary: TradeSummary = p
+          ? {
+              symbol: p.symbol,
+              strike: p.strike,
+              type: p.type,
+              qty: p.qty,
+              entry: p.entry,
+              exit: exitPrice,
+              pnl: (exitPrice - p.entry) * p.qty * (p.side === "SELL" ? -1 : 1),
+              reason,
+            }
+          : {
+              symbol: "NIFTY",
+              strike: 0,
+              type: "CE",
+              qty: 0,
+              entry: 0,
+              exit: exitPrice,
+              pnl: 0,
+              reason,
+            };
+
+        const realized = state.realized + summary.pnl;
+        const breached = realized <= -maxLoss;
+
         update({
           position: null,
-          realized: state.realized + pnl,
-          ghostDebt: pnl > 0 ? Math.max(0, state.ghostDebt - pnl * 2) : state.ghostDebt,
-        }),
+          lastTrade: summary,
+          realized,
+          locked: breached || state.locked,
+          capitalSaved: breached ? Math.max(0, balance + realized) : state.capitalSaved,
+          ghostDebt: breached
+            ? state.ghostDebt + Math.abs(realized) * 3
+            : summary.pnl > 0
+              ? Math.max(0, state.ghostDebt - summary.pnl * 2)
+              : state.ghostDebt,
+        });
+
+        return summary;
+      },
+      clearLastTrade: () => update({ lastTrade: null }),
       triggerShield: (saved, loss) =>
         update({
           locked: true,
@@ -166,10 +236,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(KEY);
         setState({ ...DEFAULT, user: state.user });
       },
-    }),
-    [state, hydrated, update],
-
-  );
+    };
+  }, [state, hydrated, update]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
