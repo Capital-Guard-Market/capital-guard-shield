@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, ShieldHalf, TrendingUp } from "lucide-react";
-import { useSession, inr } from "@/lib/session";
+import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { locked, ghostDebt } = useSession();
+  const { locked } = useSession();
 
   return (
     <div className="space-y-6">
@@ -57,7 +57,7 @@ function Home() {
         </Link>
 
         <Link
-          to="/arena"
+          to="/broker"
           className="group rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/50"
         >
           <ShieldHalf className="size-6 text-warning" />
@@ -67,7 +67,7 @@ function Home() {
             terminal, and discipline mechanics.
           </p>
           <span className="mt-4 inline-flex items-center gap-1 text-sm text-primary">
-            Choose arena{" "}
+            Connect broker{" "}
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
           </span>
         </Link>
@@ -76,14 +76,6 @@ function Home() {
       <p className="text-center text-xs text-muted-foreground">
         You can switch between Equity and F&amp;O anytime from your top navigation / profile.
       </p>
-
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Ghost Debt</p>
-        <p className="num mt-1 text-2xl font-bold text-loss">{inr(ghostDebt)}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Grows from margin breaches, shrinks with disciplined profitable days.
-        </p>
-      </div>
     </div>
   );
 }
