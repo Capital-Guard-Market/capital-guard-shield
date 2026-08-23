@@ -71,7 +71,8 @@ function RiskGate() {
                 <span className="num text-sm text-muted-foreground">{t.pct}% risk</span>
               </div>
               <p className="num mt-1 text-xl font-bold text-loss">
-                {inr(t.maxLoss)} <span className="text-xs font-normal">max loss</span>
+                {inr(maxLossFor(arena, t.id))}{" "}
+                <span className="text-xs font-normal">max loss</span>
               </p>
               <p className="mt-2 text-sm text-muted-foreground">{t.note}</p>
             </button>
