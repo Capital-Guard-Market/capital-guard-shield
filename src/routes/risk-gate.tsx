@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, Lock } from "lucide-react";
-import { ARENAS, TIERS, inr, useSession, type TierId } from "@/lib/session";
+import { ARENAS, TIERS, inr, maxLossFor, useSession, type TierId } from "@/lib/session";
 
 export const Route = createFileRoute("/risk-gate")({
   head: () => ({
