@@ -1,8 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { ShieldCheck, AlertTriangle } from "lucide-react";
-import { useSession } from "@/lib/session";
-
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Minus, Plus, ShieldCheck, AlertTriangle, Building2, TrendingUp } from "lucide-react";
+import { TIERS, inr, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/terminal")({
   head: () => ({
@@ -12,29 +11,35 @@ export const Route = createFileRoute("/terminal")({
       },
       {
         name: "description",
-        content: "Multi-Index option chain simulation with live LTPs, order tickets, and real-time risk tracking.",
+        content: "Multi-Index and Stock F&O option chain simulation with realistic margin calculations.",
       },
     ],
   }),
   component: Terminal,
 });
 
-type IndexType = "NIFTY" | "BANKNIFTY" | "SENSEX" | "FINNIFTY";
+type SegmentType = "INDICES" | "STOCKS";
+type InstrumentKey = "NIFTY" | "BANKNIFTY" | "SENSEX" | "FINNIFTY" | "RELIANCE" | "HDFCBANK" | "TATAMOTORS" | "INFY" | "ICICIBANK";
 
-interface IndexConfig {
+interface InstrumentConfig {
   name: string;
+  segment: SegmentType;
   spot: number;
   lot: number;
   step: number;
+  marginPerLot: number;
   chain: Array<{ strike: number; ce: number; pe: number }>;
 }
 
-const INDICES: Record<IndexType, IndexConfig> = {
+const INSTRUMENTS: Record<InstrumentKey, InstrumentConfig> = {
+  // Indices
   NIFTY: {
     name: "NIFTY 50",
+    segment: "INDICES",
     spot: 24780.35,
     lot: 65,
     step: 50,
+    marginPerLot: 125000,
     chain: [
       { strike: 24650, ce: 198.4, pe: 54.2 },
       { strike: 24700, ce: 162.8, pe: 71.6 },
@@ -46,9 +51,11 @@ const INDICES: Record<IndexType, IndexConfig> = {
   },
   BANKNIFTY: {
     name: "BANK NIFTY",
+    segment: "INDICES",
     spot: 51240.8,
     lot: 30,
     step: 100,
+    marginPerLot: 140000,
     chain: [
       { strike: 51000, ce: 380.5, pe: 142.0 },
       { strike: 51100, ce: 312.0, pe: 175.5 },
@@ -60,9 +67,11 @@ const INDICES: Record<IndexType, IndexConfig> = {
   },
   SENSEX: {
     name: "BSE SENSEX",
+    segment: "INDICES",
     spot: 81350.25,
     lot: 20,
     step: 100,
+    marginPerLot: 135000,
     chain: [
       { strike: 81100, ce: 410.0, pe: 165.0 },
       { strike: 81200, ce: 340.5, pe: 195.4 },
@@ -73,9 +82,11 @@ const INDICES: Record<IndexType, IndexConfig> = {
   },
   FINNIFTY: {
     name: "FIN NIFTY",
+    segment: "INDICES",
     spot: 23420.6,
     lot: 60,
     step: 50,
+    marginPerLot: 110000,
     chain: [
       { strike: 23300, ce: 185.0, pe: 65.4 },
       { strike: 23350, ce: 148.2, pe: 82.0 },
@@ -84,21 +95,90 @@ const INDICES: Record<IndexType, IndexConfig> = {
       { strike: 23500, ce: 66.0, pe: 164.5 },
     ],
   },
-};
-
-/** Approx SPAN + exposure margin blocked per lot, per index. */
-const MARGIN_PER_LOT: Record<IndexType, number> = {
-  NIFTY: 125000,
-  BANKNIFTY: 140000,
-  SENSEX: 135000,
-  FINNIFTY: 110000,
+  // Stock F&O
+  RELIANCE: {
+    name: "RELIANCE",
+    segment: "STOCKS",
+    spot: 3020.0,
+    lot: 250,
+    step: 20,
+    marginPerLot: 150000,
+    chain: [
+      { strike: 2980, ce: 58.5, pe: 18.2 },
+      { strike: 3000, ce: 44.0, pe: 24.5 },
+      { strike: 3020, ce: 32.0, pe: 32.0 },
+      { strike: 3040, ce: 22.5, pe: 42.0 },
+      { strike: 3060, ce: 15.0, pe: 54.5 },
+    ],
+  },
+  HDFCBANK: {
+    name: "HDFC BANK",
+    segment: "STOCKS",
+    spot: 1660.0,
+    lot: 550,
+    step: 10,
+    marginPerLot: 180000,
+    chain: [
+      { strike: 1640, ce: 32.0, pe: 11.5 },
+      { strike: 1650, ce: 24.5, pe: 14.2 },
+      { strike: 1660, ce: 18.0, pe: 18.0 },
+      { strike: 1670, ce: 12.5, pe: 23.5 },
+      { strike: 1680, ce: 8.5, pe: 30.0 },
+    ],
+  },
+  TATAMOTORS: {
+    name: "TATA MOTORS",
+    segment: "STOCKS",
+    spot: 1015.0,
+    lot: 575,
+    step: 10,
+    marginPerLot: 125000,
+    chain: [
+      { strike: 990, ce: 34.0, pe: 8.5 },
+      { strike: 1000, ce: 26.5, pe: 11.2 },
+      { strike: 1010, ce: 19.8, pe: 14.6 },
+      { strike: 1020, ce: 14.0, pe: 19.0 },
+      { strike: 1030, ce: 9.5, pe: 25.0 },
+    ],
+  },
+  INFY: {
+    name: "INFOSYS",
+    segment: "STOCKS",
+    spot: 1865.0,
+    lot: 400,
+    step: 20,
+    marginPerLot: 150000,
+    chain: [
+      { strike: 1820, ce: 58.0, pe: 12.4 },
+      { strike: 1840, ce: 42.5, pe: 17.0 },
+      { strike: 1860, ce: 29.0, pe: 24.0 },
+      { strike: 1880, ce: 18.5, pe: 33.5 },
+      { strike: 1900, ce: 11.0, pe: 46.0 },
+    ],
+  },
+  ICICIBANK: {
+    name: "ICICI BANK",
+    segment: "STOCKS",
+    spot: 1220.0,
+    lot: 700,
+    step: 10,
+    marginPerLot: 170000,
+    chain: [
+      { strike: 1200, ce: 29.5, pe: 9.0 },
+      { strike: 1210, ce: 22.0, pe: 12.0 },
+      { strike: 1220, ce: 16.0, pe: 16.0 },
+      { strike: 1230, ce: 11.0, pe: 21.0 },
+      { strike: 1240, ce: 7.2, pe: 27.5 },
+    ],
+  },
 };
 
 function Terminal() {
   const navigate = useNavigate();
   const session = useSession();
 
-  const [selectedIndex, setSelectedIndex] = useState<IndexType>("NIFTY");
+  const [activeSegment, setActiveSegment] = useState<SegmentType>("INDICES");
+  const [selectedKey, setSelectedKey] = useState<InstrumentKey>("NIFTY");
   const [selectedStrike, setSelectedStrike] = useState<number>(24800);
   const [optionSide, setOptionSide] = useState<"CE" | "PE">("CE");
   const [orderType, setOrderType] = useState<"BUY" | "SELL">("BUY");
@@ -106,18 +186,45 @@ function Terminal() {
   const [entryPrice, setEntryPrice] = useState(104.2);
   const [stopLoss, setStopLoss] = useState(85.0);
 
-  const activeIndex = INDICES[selectedIndex];
-  const totalQty = lots * activeIndex.lot;
+  const activeInstrument = INSTRUMENTS[selectedKey];
+  const totalQty = lots * activeInstrument.lot;
 
-  const handleIndexChange = (indexKey: IndexType) => {
-    setSelectedIndex(indexKey);
-    const newIdx = INDICES[indexKey];
-    const midStrike = newIdx.chain[Math.floor(newIdx.chain.length / 2)];
-    if (!midStrike) return;
-    const price = optionSide === "CE" ? midStrike.ce : midStrike.pe;
-    setSelectedStrike(midStrike.strike);
-    setEntryPrice(price);
-    setStopLoss(Math.round(price * 0.8));
+  const isFuturesArena = session?.arena === "futures";
+  const virtualBalance = isFuturesArena ? 5000000 : 1000000;
+
+  const isMarginOrder = isFuturesArena || orderType === "SELL";
+  const capitalRequired = isMarginOrder
+    ? lots * activeInstrument.marginPerLot
+    : totalQty * entryPrice;
+
+  const riskPerUnit = Math.max(0, entryPrice - stopLoss);
+  const plannedRisk = isMarginOrder ? totalQty * (entryPrice * 0.015) : totalQty * riskPerUnit;
+
+  const getSessionLimit = () => {
+    if (session?.dailyLossLimit) return session.dailyLossLimit;
+    if (session?.maxLoss) return session.maxLoss;
+    if (session?.tier && (TIERS as any)?.[session.tier]?.maxLoss) {
+      return (TIERS as any)[session.tier].maxLoss;
+    }
+    return isFuturesArena ? 250000 : 5000;
+  };
+
+  const dailyLimit = getSessionLimit();
+  const realizedLoss = session?.totalRealizedLoss || 0;
+  const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
+
+  const isRiskExceeded = plannedRisk > remainingBudget;
+  const isInsufficientCapital = capitalRequired > virtualBalance;
+  const canExecute = !isRiskExceeded && !isInsufficientCapital && capitalRequired > 0;
+
+  const handleInstrumentChange = (key: InstrumentKey) => {
+    setSelectedKey(key);
+    const inst = INSTRUMENTS[key];
+    const midRow = inst.chain[Math.floor(inst.chain.length / 2)];
+    setSelectedStrike(midRow.strike);
+    const initialPrice = optionSide === "CE" ? midRow.ce : midRow.pe;
+    setEntryPrice(initialPrice);
+    setStopLoss(Math.round(initialPrice * 0.8));
   };
 
   const selectContract = (strike: number, side: "CE" | "PE", price: number) => {
@@ -127,88 +234,119 @@ function Terminal() {
     setStopLoss(Math.round(price * 0.8));
   };
 
-  const riskPerUnit = Math.max(0, entryPrice - stopLoss);
-  const plannedRisk = totalQty * riskPerUnit;
-
-  // Margin engine: premium debit for options buying, SPAN + exposure for futures / option selling
-  const isFuturesArena = session.arena === "futures";
-  const isPremiumMode = !isFuturesArena && orderType === "BUY";
-  const marginPerLot = MARGIN_PER_LOT[selectedIndex];
-  const capitalRequired = isPremiumMode ? totalQty * entryPrice : lots * marginPerLot;
-  const marginLabel = isPremiumMode ? "Premium Amount" : "SPAN + Exposure Margin";
-  const accountBalance = session.balance;
-  const isMarginExceeded = capitalRequired > accountBalance;
-
-  const dailyLimit = session.maxLoss;
-  const realizedLoss = Math.max(0, -session.realized);
-  const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
-
-  const isRiskExceeded = plannedRisk > remainingBudget;
-  const isBufferTooSmall = remainingBudget < activeIndex.lot * 5;
-  const canExecute =
-    !isRiskExceeded && !isBufferTooSmall && !isMarginExceeded && plannedRisk > 0 && !session.locked;
-
   const handleExecute = () => {
     if (!canExecute) return;
 
-    session.openPosition({
-      symbol: selectedIndex,
+    const newPosition = {
+      id: "pos_" + Date.now(),
+      index: selectedKey,
+      symbol: `${selectedKey} ${selectedStrike} ${optionSide}`,
       strike: selectedStrike,
-      type: optionSide,
-      side: orderType,
-      qty: totalQty,
-      entry: entryPrice,
-      sl: stopLoss > 0 ? stopLoss : null,
-      target: null,
-    });
+      side: optionSide,
+      type: orderType,
+      lots,
+      quantity: totalQty,
+      entryPrice,
+      currentPrice: entryPrice,
+      stopLoss,
+      plannedRisk,
+      capitalRequired,
+      isMarginOrder,
+      timestamp: new Date().toLocaleTimeString(),
+    };
 
+    localStorage.setItem("capitalguard_position", JSON.stringify(newPosition));
     navigate({ to: "/position" });
   };
 
+  const visibleInstruments = (Object.keys(INSTRUMENTS) as InstrumentKey[]).filter(
+    (k) => INSTRUMENTS[k].segment === activeSegment
+  );
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-3 sm:p-6 pb-24">
-      {/* Top Header & Risk Telemetry */}
-      <div className="max-w-4xl mx-auto flex items-center justify-between p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl mb-4">
+      {/* Session Telemetry Bar */}
+      <div className="max-w-5xl mx-auto flex items-center justify-between p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl mb-4">
         <div>
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Session Risk Shield</span>
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+            {isFuturesArena ? "Futures Arena Shield" : "Options Arena Shield"}
+          </span>
           <div className="flex items-center space-x-2 mt-0.5">
             <span className="text-lg font-bold text-amber-400">₹{remainingBudget.toLocaleString("en-IN")}</span>
-            <span className="text-xs text-slate-400">/ ₹{dailyLimit.toLocaleString("en-IN")}</span>
+            <span className="text-xs text-slate-400">/ ₹{dailyLimit.toLocaleString("en-IN")} Max Loss</span>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <ShieldCheck className="w-5 h-5 text-emerald-400" />
-          <span className="text-xs font-semibold text-emerald-400">Active Protection</span>
+        <div className="text-right">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Virtual Capital</span>
+          <div className="text-sm font-bold font-mono text-slate-200">₹{virtualBalance.toLocaleString("en-IN")}</div>
         </div>
       </div>
 
-      {/* Multi-Index Selector Tabs */}
-      <div className="max-w-4xl mx-auto grid grid-cols-4 gap-2 mb-4">
-        {(Object.keys(INDICES) as IndexType[]).map((key) => (
-          <button
-            key={key}
-            onClick={() => handleIndexChange(key)}
-            className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center ${
-              selectedIndex === key
-                ? "bg-amber-400 text-slate-950 border-amber-400 shadow-lg shadow-amber-400/20 scale-[1.02]"
-                : "bg-[#151A23] text-slate-400 border-[#222B3A] hover:text-white"
-            }`}
-          >
-            <span>{INDICES[key].name}</span>
-            <span className={`text-[10px] mt-0.5 ${selectedIndex === key ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
-              {INDICES[key].spot.toLocaleString("en-IN")}
-            </span>
-          </button>
-        ))}
+      {/* Segment Selector */}
+      <div className="max-w-5xl mx-auto flex space-x-2 p-1 bg-[#151A23] border border-[#222B3A] rounded-xl mb-3">
+        <button
+          onClick={() => {
+            setActiveSegment("INDICES");
+            handleInstrumentChange("NIFTY");
+          }}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+            activeSegment === "INDICES"
+              ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          <span>Index F&O</span>
+        </button>
+        <button
+          onClick={() => {
+            setActiveSegment("STOCKS");
+            handleInstrumentChange("RELIANCE");
+          }}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+            activeSegment === "STOCKS"
+              ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          <span>Stock F&O</span>
+        </button>
       </div>
 
-      <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Option Chain Section */}
+      {/* Instrument Tabs */}
+      <div className="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-4">
+        {visibleInstruments.map((key) => {
+          const inst = INSTRUMENTS[key];
+          const isSelected = selectedKey === key;
+          return (
+            <button
+              key={key}
+              onClick={() => handleInstrumentChange(key)}
+              className={`py-2 px-3 rounded-xl border text-left transition-all ${
+                isSelected
+                  ? "bg-slate-800 border-amber-400 shadow-md shadow-amber-400/10"
+                  : "bg-[#151A23] text-slate-400 border-[#222B3A] hover:border-slate-700 hover:text-white"
+              }`}
+            >
+              <div className="text-[11px] font-bold text-white flex justify-between">
+                <span>{inst.name}</span>
+                <span className="text-[10px] text-slate-400 font-mono">L:{inst.lot}</span>
+              </div>
+              <div className="text-xs font-mono font-semibold text-emerald-400 mt-0.5">
+                ₹{inst.spot.toLocaleString("en-IN")}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Strike Chain Matrix */}
         <div className="lg:col-span-7 bg-[#151A23] border border-[#222B3A] rounded-2xl p-4">
           <div className="flex items-center justify-between pb-3 border-b border-[#222B3A] mb-3">
-            <div className="text-xs font-bold text-slate-300">STRIKE MATRIX</div>
-            <div className="text-[11px] text-slate-400">Lot: {activeIndex.lot} Qty</div>
+            <div className="text-xs font-bold text-slate-300 uppercase">{activeInstrument.name} OPTION CHAIN</div>
+            <div className="text-[11px] text-slate-400">Lot Size: {activeInstrument.lot} Qty</div>
           </div>
 
           <div className="grid grid-cols-3 text-[11px] font-bold text-slate-400 text-center pb-2 border-b border-slate-800">
@@ -218,15 +356,15 @@ function Terminal() {
           </div>
 
           <div className="space-y-1.5 mt-2">
-            {activeIndex.chain.map((row) => {
-              const isSelectedCE = selectedStrike === row.strike && optionSide === "CE";
-              const isSelectedPE = selectedStrike === row.strike && optionSide === "PE";
+            {activeInstrument.chain.map((row) => {
+              const isCE = selectedStrike === row.strike && optionSide === "CE";
+              const isPE = selectedStrike === row.strike && optionSide === "PE";
               return (
                 <div key={row.strike} className="grid grid-cols-3 text-xs text-center items-center py-1">
                   <button
                     onClick={() => selectContract(row.strike, "CE", row.ce)}
                     className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
-                      isSelectedCE
+                      isCE
                         ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30"
                         : "bg-slate-900/60 text-emerald-400 hover:bg-slate-800"
                     }`}
@@ -239,7 +377,7 @@ function Terminal() {
                   <button
                     onClick={() => selectContract(row.strike, "PE", row.pe)}
                     className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
-                      isSelectedPE
+                      isPE
                         ? "bg-rose-500 text-slate-950 shadow-md shadow-rose-500/30"
                         : "bg-slate-900/60 text-rose-400 hover:bg-slate-800"
                     }`}
@@ -252,23 +390,23 @@ function Terminal() {
           </div>
         </div>
 
-        {/* Order Ticket Section */}
+        {/* Order Ticket */}
         <div className="lg:col-span-5 bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-slate-300 mb-3">ORDER TICKET</div>
 
-            {/* Selected Contract Info */}
             <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 mb-3 flex items-center justify-between">
               <div>
                 <span className="text-sm font-bold text-white">
-                  {selectedIndex} {selectedStrike} {optionSide}
+                  {selectedKey} {selectedStrike} {optionSide}
                 </span>
-                <div className="text-[10px] text-slate-400">{activeIndex.name} Option</div>
+                <div className="text-[10px] text-slate-400">
+                  {activeInstrument.name} • {activeInstrument.segment === "STOCKS" ? "Stock F&O" : "Index F&O"}
+                </div>
               </div>
               <span className="text-sm font-bold font-mono text-amber-400">₹{entryPrice.toFixed(1)}</span>
             </div>
 
-            {/* Buy / Sell Toggles */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 onClick={() => setOrderType("BUY")}
@@ -288,9 +426,8 @@ function Terminal() {
               </button>
             </div>
 
-            {/* Lot Counter */}
             <div className="flex items-center justify-between text-xs py-2 border-b border-slate-800/80">
-              <span className="text-slate-400">Lots ({activeIndex.lot} Qty/Lot)</span>
+              <span className="text-slate-400">Lots ({activeInstrument.lot} Qty/Lot)</span>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setLots(Math.max(1, lots - 1))}
@@ -308,7 +445,6 @@ function Terminal() {
               </div>
             </div>
 
-            {/* Price & SL Inputs */}
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div>
                 <label className="text-[10px] text-slate-400">Entry Price (₹)</label>
@@ -330,64 +466,45 @@ function Terminal() {
               </div>
             </div>
 
-            {/* Planned Risk Box */}
-            <div className="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800">
-              <div className="flex justify-between items-center text-xs mb-1.5">
-                <span className="text-slate-400">Capital Required:</span>
-                <span className={`font-mono font-bold ${isMarginExceeded ? "text-rose-400" : "text-sky-400"}`}>
-                  ₹{capitalRequired.toLocaleString("en-IN")}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[10px] mb-2 pb-2 border-b border-slate-800">
-                <span
-                  className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${
-                    isPremiumMode
-                      ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/50"
-                      : "bg-sky-950/60 text-sky-400 border border-sky-800/50"
-                  }`}
-                >
-                  {marginLabel}
-                </span>
-                <span className="text-slate-500 font-mono">
-                  Balance ₹{accountBalance.toLocaleString("en-IN")}
-                </span>
-              </div>
-
-              {isMarginExceeded && (
-                <div className="mb-2 text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-start space-x-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>
-                    Insufficient Account Margin — ₹{capitalRequired.toLocaleString("en-IN")} needed vs ₹
-                    {accountBalance.toLocaleString("en-IN")} available. Reduce lots.
+            <div className="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-slate-800 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 block">
+                    {isMarginOrder ? "SPAN Margin Required" : "Upfront Premium Needed"}
+                  </span>
+                  <span className="font-mono font-bold text-white text-sm">
+                    ₹{capitalRequired.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block">
+                    {isMarginOrder ? `₹${(activeInstrument.marginPerLot / 100000).toFixed(2)}L/lot` : `${totalQty} Qty × ₹${entryPrice}`}
                   </span>
                 </div>
-              )}
-
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400">Planned Risk:</span>
-                <span className={`font-mono font-bold ${isRiskExceeded ? "text-rose-400" : "text-amber-400"}`}>
-                  ₹{plannedRisk.toLocaleString("en-IN")}
-                </span>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">Planned Risk (Max SL)</span>
+                  <span className={`font-mono font-bold text-sm ${isRiskExceeded ? "text-rose-400" : "text-amber-400"}`}>
+                    ₹{plannedRisk.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block">Against Daily Guardrail</span>
+                </div>
               </div>
 
               {isRiskExceeded && (
-                <div className="mt-2 text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-start space-x-1.5">
+                <div className="text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-start space-x-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <span>
-                    Risk of ₹{plannedRisk.toLocaleString("en-IN")} exceeds remaining limit (₹{remainingBudget.toLocaleString("en-IN")}). Reduce lots or tighten SL.
+                    Planned risk ₹{plannedRisk.toLocaleString("en-IN")} exceeds remaining shield budget (₹{remainingBudget.toLocaleString("en-IN")}).
                   </span>
                 </div>
               )}
 
-              {isBufferTooSmall && (
-                <div className="mt-2 text-[10px] text-amber-400 bg-amber-950/40 p-2 rounded border border-amber-800/50">
-                  🛡️ Remaining shield limit is below minimum tick buffer for {selectedIndex}.
+              {isInsufficientCapital && (
+                <div className="text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50">
+                  ⚠️ Insufficient virtual capital (Required: ₹{capitalRequired.toLocaleString("en-IN")} | Available: ₹{virtualBalance.toLocaleString("en-IN")}).
                 </div>
               )}
             </div>
           </div>
 
-          {/* Action Trigger */}
           <button
             disabled={!canExecute}
             onClick={handleExecute}
@@ -397,13 +514,7 @@ function Terminal() {
                 : "bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800"
             }`}
           >
-            {isMarginExceeded
-              ? "INSUFFICIENT ACCOUNT MARGIN"
-              : isRiskExceeded
-                ? "BLOCKED BY SHIELD"
-                : isBufferTooSmall
-                  ? "DAILY LIMIT DEPLETED"
-                  : "EXECUTE PROTECTED ORDER"}
+            {isInsufficientCapital ? "INSUFFICIENT CAPITAL" : isRiskExceeded ? "BLOCKED BY SHIELD" : "EXECUTE PROTECTED ORDER"}
           </button>
         </div>
       </div>
