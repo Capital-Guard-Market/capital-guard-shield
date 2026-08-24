@@ -1,73 +1,99 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect } from "react";
+import { ShieldCheck, TrendingUp, TrendingDown, Sparkles } from "lucide-react";
 
-const DURATION = 5000;
-
-function statusFor(pct: number) {
-  const t = (pct / 100) * 5;
-  if (t < 2) return "Loading Market Feeds...";
-  if (t < 4) return "Calibrating Risk Shield...";
-  return "Shield Engine Ready.";
+interface SplashScreenProps {
+  onFinish?: () => void;
 }
 
-export function SplashScreen({ onDone }: { onDone: () => void }) {
-  const [progress, setProgress] = useState(0);
-  const [leaving, setLeaving] = useState(false);
-  const done = useRef(false);
-
-  const finish = () => {
-    if (done.current) return;
-    done.current = true;
-    setLeaving(true);
-    window.setTimeout(onDone, 400);
-  };
+export function SplashScreen({ onFinish }: SplashScreenProps) {
+  const [stage, setStage] = useState<"charging" | "impact" | "reveal" | "fadeout">("charging");
 
   useEffect(() => {
-    const start = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const pct = Math.min(100, ((now - start) / DURATION) * 100);
-      setProgress(pct);
-      if (pct < 100) raf = requestAnimationFrame(tick);
-      else finish();
+    // Timeline of the clash animation
+    const t1 = setTimeout(() => setStage("impact"), 800);   // Bull & Bear hit center
+    const t2 = setTimeout(() => setStage("reveal"), 1300);  // CapitalGuard shield emerges
+    const t3 = setTimeout(() => setStage("fadeout"), 2500); // Screen fades out
+    const t4 = setTimeout(() => {
+      if (onFinish) onFinish();
+    }, 2900);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onFinish]);
 
   return (
     <div
-      className={`fixed inset-0 z-[100] flex flex-col bg-[#0B0F19] transition-opacity duration-[400ms] ${
-        leaving ? "opacity-0" : "opacity-100"
+      className={`fixed inset-0 z-50 bg-[#07090E] flex flex-col items-center justify-center overflow-hidden transition-opacity duration-500 select-none ${
+        stage === "fadeout" ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
-      <button
-        onClick={finish}
-        className="absolute right-4 top-4 z-10 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs font-semibold text-white/90 backdrop-blur transition-colors hover:bg-white/20"
-      >
-        Skip ➔
-      </button>
+      {/* Background glow effects */}
+      <div className="absolute inset-0 bg-radial from-amber-500/10 via-transparent to-transparent opacity-50" />
 
-      <video
-        src="/splash.mp4"
-        autoPlay
-        muted
-        playsInline
-        onEnded={finish}
-        className="h-full w-full flex-1 object-contain"
-      />
-
-      <div className="absolute inset-x-0 bottom-0 px-6 pb-10">
-        <div className="mx-auto max-w-md">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#FACC15] to-[#38BDF8] shadow-[0_0_16px_rgba(56,189,248,0.7)] transition-[width] duration-100 ease-linear"
-              style={{ width: `${progress}%` }}
-            />
+      <div className="relative w-full max-w-md h-64 flex items-center justify-center">
+        {/* GREEN BULL (Charges from Left) */}
+        <div
+          className={`absolute flex flex-col items-center transition-all duration-700 ease-out transform ${
+            stage === "charging"
+              ? "-translate-x-48 opacity-20 scale-75 text-emerald-500"
+              : stage === "impact"
+              ? "-translate-x-6 scale-125 text-emerald-400 drop-shadow-[0_0_25px_rgba(16,185,129,0.9)]"
+              : "-translate-x-24 opacity-0 scale-50 text-emerald-600"
+          }`}
+        >
+          <div className="p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-2xl shadow-xl backdrop-blur-md">
+            <TrendingUp className="w-10 h-10 stroke-[2.5]" />
           </div>
-          <div className="num mt-3 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/70">
-            <span>{statusFor(progress)}</span>
-            <span>{Math.round(progress)}%</span>
+          <span className="text-[11px] font-black tracking-widest text-emerald-400 mt-2 font-mono">BULL</span>
+        </div>
+
+        {/* RED BEAR (Charges from Right) */}
+        <div
+          className={`absolute flex flex-col items-center transition-all duration-700 ease-out transform ${
+            stage === "charging"
+              ? "translate-x-48 opacity-20 scale-75 text-rose-500"
+              : stage === "impact"
+              ? "translate-x-6 scale-125 text-rose-400 drop-shadow-[0_0_25px_rgba(244,63,94,0.9)]"
+              : "translate-x-24 opacity-0 scale-50 text-rose-600"
+          }`}
+        >
+          <div className="p-3 bg-rose-950/60 border border-rose-500/40 rounded-2xl shadow-xl backdrop-blur-md">
+            <TrendingDown className="w-10 h-10 stroke-[2.5]" />
+          </div>
+          <span className="text-[11px] font-black tracking-widest text-rose-400 mt-2 font-mono">BEAR</span>
+        </div>
+
+        {/* IMPACT SHOCKWAVE & FLASH */}
+        {stage === "impact" && (
+          <div className="absolute inset-0 flex items-center justify-center animate-ping pointer-events-none">
+            <div className="w-24 h-24 rounded-full bg-amber-400/40 blur-xl" />
+          </div>
+        )}
+
+        {/* CAPITALGUARD BRAND LOGO REVEAL (Emerges from Center Impact) */}
+        <div
+          className={`absolute flex flex-col items-center transition-all duration-700 ease-out transform ${
+            stage === "reveal" || stage === "fadeout"
+              ? "scale-100 opacity-100 translate-y-0"
+              : "scale-50 opacity-0 translate-y-8"
+          }`}
+        >
+          <div className="relative p-4 rounded-3xl bg-gradient-to-b from-amber-400/20 to-amber-600/5 border-2 border-amber-400/60 shadow-[0_0_40px_rgba(251,191,36,0.3)] backdrop-blur-xl">
+            <ShieldCheck className="w-14 h-14 text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]" />
+            <Sparkles className="w-4 h-4 text-amber-300 absolute -top-1 -right-1 animate-pulse" />
+          </div>
+
+          <div className="text-center mt-3 space-y-1">
+            <h1 className="text-2xl font-black tracking-widest text-white uppercase font-sans drop-shadow-md">
+              CAPITAL<span className="text-amber-400">GUARD</span>
+            </h1>
+            <p className="text-[10px] uppercase font-bold tracking-[0.25em] text-slate-400 font-mono">
+              Unbreachable Risk Engine
+            </p>
           </div>
         </div>
       </div>

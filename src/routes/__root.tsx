@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
-import { TrendingUp, Layers, User, Bookmark, Briefcase } from "lucide-react";
+import { TrendingUp, User, Bookmark, Briefcase } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SplashScreen } from "@/components/SplashScreen";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -9,6 +10,20 @@ export const Route = createRootRoute({
 function RootComponent() {
   const location = useLocation();
   const [openCount, setOpenCount] = useState(0);
+  const [showSplash, setShowSplash] = useState(true);
+
+  // Show splash animation on first launch per session
+  useEffect(() => {
+    const hasSeenSplash = sessionStorage.getItem("capitalguard_splash_seen");
+    if (hasSeenSplash) {
+      setShowSplash(false);
+    }
+  }, []);
+
+  const handleSplashFinish = () => {
+    sessionStorage.setItem("capitalguard_splash_seen", "true");
+    setShowSplash(false);
+  };
 
   useEffect(() => {
     try {
@@ -29,6 +44,9 @@ function RootComponent() {
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 flex flex-col justify-between font-sans selection:bg-amber-400 selection:text-slate-950">
+      {/* Cinematic Bull & Bear Splash Opening */}
+      {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
+
       <main className="flex-1">
         <Outlet />
       </main>
