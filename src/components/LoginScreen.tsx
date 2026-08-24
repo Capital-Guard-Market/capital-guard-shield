@@ -1,6 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ShieldHalf } from "lucide-react";
 import { useSession } from "@/lib/session";
 
 function GoogleIcon() {
@@ -38,10 +37,16 @@ export function LoginScreen() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-sm text-center">
-        <ShieldHalf className="shield-pulse mx-auto size-20 text-primary" />
-        <h1 className="mt-6 text-3xl font-bold tracking-tight">CapitalGuard</h1>
+        <img
+          src="/logo.png"
+          alt="CapitalGuard"
+          className="shield-pulse mx-auto w-56 max-w-full rounded-xl"
+        />
+        <h1 className="mt-6 bg-gradient-to-b from-white via-slate-200 to-slate-400 bg-clip-text text-3xl font-bold tracking-tight text-transparent">
+          Practice with Consequences • Secure Future
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Practice With Consequences — Discipline-First Trading Simulator
+          Discipline-First Trading Simulator
         </p>
 
         <button

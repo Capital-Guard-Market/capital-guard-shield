@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, Home, LineChart, LogOut, ShieldHalf, Star, User } from "lucide-react";
-import type { ReactNode } from "react";
+import { CalendarDays, Home, LineChart, LogOut, Star, User } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/lib/session";
 import { LoginScreen } from "@/components/LoginScreen";
+import { SplashScreen } from "@/components/SplashScreen";
 
 const NAV = [
   { to: "/", label: "Terminal", icon: LineChart },
@@ -23,6 +24,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, hydrated, signOut } = useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  const [splash, setSplash] = useState(false);
+  useEffect(() => {
+    if (!sessionStorage.getItem("cg_splash_seen")) setSplash(true);
+  }, []);
+
+  if (splash)
+    return (
+      <SplashScreen
+        onDone={() => {
+          sessionStorage.setItem("cg_splash_seen", "1");
+          setSplash(false);
+        }}
+      />
+    );
+
   if (!hydrated) return <div className="min-h-screen bg-background" />;
   if (!user) return <LoginScreen />;
 
@@ -31,8 +47,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto grid h-14 max-w-3xl grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-4">
           <Link to="/" className="flex min-w-0 items-center gap-2">
-            <ShieldHalf className="size-5 shrink-0 text-primary" />
-            <span className="truncate text-sm font-semibold tracking-tight">CapitalGuard</span>
+            <img src="/logo.png" alt="CapitalGuard" className="h-8 w-auto shrink-0 rounded" />
+            <span className="truncate bg-gradient-to-b from-white via-slate-200 to-slate-400 bg-clip-text text-sm font-bold tracking-tight text-transparent">
+              CapitalGuard
+            </span>
           </Link>
 
           {pathname !== "/" && (
