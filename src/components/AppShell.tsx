@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { CalendarDays, Home, LineChart, LogOut, Star, User } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/lib/session";
 import { LoginScreen } from "@/components/LoginScreen";
+import { SplashScreen } from "@/components/SplashScreen";
 
 const NAV = [
   { to: "/", label: "Terminal", icon: LineChart },
@@ -22,6 +23,21 @@ const NAV = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, hydrated, signOut } = useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  const [splash, setSplash] = useState(false);
+  useEffect(() => {
+    if (!sessionStorage.getItem("cg_splash_seen")) setSplash(true);
+  }, []);
+
+  if (splash)
+    return (
+      <SplashScreen
+        onDone={() => {
+          sessionStorage.setItem("cg_splash_seen", "1");
+          setSplash(false);
+        }}
+      />
+    );
 
   if (!hydrated) return <div className="min-h-screen bg-background" />;
   if (!user) return <LoginScreen />;
