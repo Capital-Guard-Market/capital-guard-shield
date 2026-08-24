@@ -1,7 +1,8 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Minus, Plus, ShieldCheck, X, AlertTriangle } from "lucide-react";
-import { TIERS, inr, useSession } from "@/lib/session";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { useSession } from "@/lib/session";
+
 
 export const Route = createFileRoute("/terminal")({
   head: () => ({
