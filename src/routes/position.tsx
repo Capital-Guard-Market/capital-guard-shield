@@ -1,228 +1,200 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { TIERS, inr, useSession, type TradeSummary } from "@/lib/session";
+import { useEffect, useState } from "react";
+import { ShieldCheck, ArrowLeft, TrendingUp, TrendingDown, AlertOctagon } from "lucide-react";
+import { inr, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/position")({
   head: () => ({
-    meta: [
-      { title: "Active Position — CapitalGuard" },
-      {
-        name: "description",
-        content: "Watch live P&L on your simulated NIFTY option position and exit on your terms.",
-      },
-      { property: "og:title", content: "Active Position — CapitalGuard" },
-      {
-        property: "og:description",
-        content: "Live mark-to-market P&L with a hard shield lockout when the limit breaks.",
-      },
-    ],
+    meta: [{ title: "Live Position 🛡️ CapitalGuard" }],
   }),
-  component: PositionPage,
+  component: PositionScreen,
 });
 
-function SummaryModal({ trade, onClose }: { trade: TradeSummary; onClose: () => void }) {
-  const win = trade.pnl >= 0;
-  const points = trade.exit - trade.entry;
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-background/70 p-4 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Trade Closed</h2>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              win ? "bg-profit/15 text-profit" : "bg-loss/15 text-loss"
-            }`}
-          >
-            {win ? "🟢 PROFIT" : "🔴 LOSS"}
-          </span>
-        </div>
-
-        <p className={`num mt-5 text-4xl font-bold ${win ? "text-profit" : "text-loss"}`}>
-          {inr(trade.pnl, { sign: true })}
-        </p>
-
-        <dl className="mt-6 space-y-3 text-sm">
-          {[
-            ["Instrument", `${trade.symbol} ${trade.strike} ${trade.type}`],
-            ["Entry price", `₹${trade.entry.toFixed(2)}`],
-            ["Exit price", `₹${trade.exit.toFixed(2)}`],
-            ["Points captured", `${points >= 0 ? "+" : ""}${points.toFixed(2)} pts`],
-            ["Quantity", `${trade.qty} Qty`],
-          ].map(([k, v]) => (
-            <div key={k} className="flex justify-between">
-              <dt className="text-muted-foreground">{k}</dt>
-              <dd className="num font-semibold">{v}</dd>
-            </div>
-          ))}
-        </dl>
-
-        <button
-          onClick={onClose}
-          className="mt-6 w-full rounded-xl bg-primary py-3 text-sm font-bold uppercase tracking-wider text-background transition-opacity hover:opacity-90"
-        >
-          Back to terminal
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PositionPage() {
-  const { position, tier, locked, maxLoss, realized, closePosition, clearLastTrade } = useSession();
+export function PositionScreen() {
   const navigate = useNavigate();
-  const [ltp, setLtp] = useState(position?.entry ?? 0);
-  const [summary, setSummary] = useState<TradeSummary | null>(null);
-  const closing = useRef(false);
+  const session = useSession();
 
+  // Load active position from localStorage immediately
+  const [position, setPosition] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem("capitalguard_position");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  });
+
+  const [currentLtp, setCurrentLtp] = useState<number>(position?.entryPrice || 0);
+  const [isAutoExited, setIsAutoExited] = useState(false);
+
+  // Sync state if localStorage changes or component remounts
   useEffect(() => {
-    if (locked && !summary) navigate({ to: "/shield" });
-  }, [locked, summary, navigate]);
+    try {
+      const saved = localStorage.getItem("capitalguard_position");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setPosition(parsed);
+        setCurrentLtp(parsed.entryPrice);
+      }
+    } catch (e) {}
+  }, []);
 
+  // Live Price Ticks Simulator
   useEffect(() => {
-    if (!position) return;
-    closing.current = false;
-    setLtp(position.entry);
-    const id = setInterval(() => {
-      setLtp((p) => Math.max(1, p + (Math.random() - 0.48) * 4));
-    }, 1400);
-    return () => clearInterval(id);
-  }, [position]);
+    if (!position || isAutoExited) return;
 
-  const close = (exitPrice: number, reason: TradeSummary["reason"]) => {
-    if (closing.current) return;
-    closing.current = true;
-    setSummary(closePosition(exitPrice, reason));
+    const interval = setInterval(() => {
+      setCurrentLtp((prev) => {
+        const delta = (Math.random() - 0.48) * (prev * 0.008);
+        const nextPrice = Math.max(0.5, Number((prev + delta).toFixed(2)));
+
+        // Shield Auto Square-off Trigger on SL hit
+        if (position.type === "BUY" && nextPrice <= position.stopLoss) {
+          setIsAutoExited(true);
+          clearInterval(interval);
+        } else if (position.type === "SELL" && nextPrice >= position.stopLoss) {
+          setIsAutoExited(true);
+          clearInterval(interval);
+        }
+        return nextPrice;
+      });
+    }, 1200);
+
+    return () => clearInterval(interval);
+  }, [position, isAutoExited]);
+
+  const pnl = position
+    ? position.type === "BUY"
+      ? (currentLtp - position.entryPrice) * position.quantity
+      : (position.entryPrice - currentLtp) * position.quantity
+    : 0;
+
+  const isProfit = pnl >= 0;
+  const pnlPercent = position && position.entryPrice > 0 
+    ? (((currentLtp - position.entryPrice) / position.entryPrice) * 100).toFixed(2) 
+    : "0.00";
+
+  const handleSquareOff = () => {
+    localStorage.removeItem("capitalguard_position");
+    setPosition(null);
+    navigate({ to: "/terminal" });
   };
-
-  const pnl = position ? (ltp - position.entry) * position.qty : 0;
-
-  // Auto SL / target / shield checks
-  useEffect(() => {
-    if (!position || closing.current) return;
-    if (position.sl !== null && ltp <= position.sl) return close(position.sl, "sl");
-    if (position.target !== null && ltp >= position.target) return close(position.target, "target");
-    if (realized + pnl <= -maxLoss) close(ltp, "shield");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ltp, position, realized, maxLoss, pnl]);
-
-  if (summary) {
-    return (
-      <SummaryModal
-        trade={summary}
-        onClose={() => {
-          clearLastTrade();
-          setSummary(null);
-          navigate({ to: locked ? "/shield" : "/terminal" });
-        }}
-      />
-    );
-  }
-
-  if (locked) return null;
 
   if (!position) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="text-sm text-muted-foreground">No open position.</p>
-        <Link to="/terminal" className="mt-3 inline-block text-sm font-semibold text-primary">
-          Back to terminal →
-        </Link>
+      <div className="min-h-screen bg-[#0B0E14] text-slate-100 flex flex-col items-center justify-center p-4">
+        <div className="text-center p-8 bg-[#151A23] border border-[#222B3A] rounded-2xl max-w-sm w-full shadow-2xl">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <h3 className="font-bold text-white text-base mb-1">No Open Position</h3>
+          <p className="text-slate-400 text-xs mb-5">
+            Select an index or stock contract in the terminal and execute a trade.
+          </p>
+          <Link
+            to="/terminal"
+            className="block w-full py-2.5 px-4 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs hover:brightness-110 transition-all text-center"
+          >
+            Open Terminal →
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const t = tier ? TIERS[tier] : TIERS.balanced;
-  const up = pnl >= 0;
-  const dayLoss = Math.max(0, -(realized + pnl));
-
   return (
-    <div className="space-y-5">
-      <div
-        className={`rounded-2xl border bg-card p-6 ${up ? "border-profit/40" : "border-loss/40"}`}
-      >
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          {position.side} · {position.qty} qty · 28 AUG
-        </p>
-        <h1 className="mt-1 text-xl font-semibold">
-          {position.symbol} {position.strike} {position.type}
-        </h1>
-
-        <p className={`num mt-5 text-4xl font-bold ${up ? "text-profit" : "text-loss"}`}>
-          {inr(pnl, { sign: true, decimals: 0 })}
-        </p>
-        <p className="num mt-1 text-sm text-muted-foreground">
-          LTP ₹{ltp.toFixed(2)} · Entry ₹{position.entry.toFixed(2)}
-        </p>
-
-        <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-xl border border-border p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Stop-loss</p>
-            <p className="num font-semibold text-loss">
-              {position.sl !== null ? `₹${position.sl.toFixed(2)}` : "Not set"}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Target</p>
-            <p className="num font-semibold text-profit">
-              {position.target !== null ? `₹${position.target.toFixed(2)}` : "Not set"}
-            </p>
+    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 sm:p-6 pb-24">
+      <div className="max-w-xl mx-auto space-y-4">
+        {/* Header Navigation */}
+        <div className="flex items-center justify-between pb-3 border-b border-[#222B3A]">
+          <Link to="/terminal" className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            <span>Return to Terminal</span>
+          </Link>
+          <div className="flex items-center space-x-1.5 text-xs text-emerald-400 font-semibold">
+            <ShieldCheck className="w-4 h-4" />
+            <span>Shield Active</span>
           </div>
         </div>
-      </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Daily loss limit ({t.name})</span>
-          <span className="num font-semibold text-loss">
-            {inr(dayLoss)} / {inr(maxLoss)}
-          </span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
-          <div
-            className="h-full rounded-full bg-loss transition-all"
-            style={{ width: `${Math.min(100, (dayLoss / maxLoss) * 100)}%` }}
-          />
-        </div>
-      </div>
+        {/* SL Hit Alert Banner */}
+        {isAutoExited && (
+          <div className="p-4 bg-rose-950/80 border border-rose-600 rounded-2xl flex items-start space-x-3 text-rose-200">
+            <AlertOctagon className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-bold text-white">GUARDRAIL AUTO-EXIT TRIGGERED</div>
+              <div className="text-xs text-rose-300 mt-0.5">
+                Stop-loss price of ₹{position.stopLoss} was reached. Position has been automatically squared off to protect your daily limit.
+              </div>
+            </div>
+          </div>
+        )}
 
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Demo testing controls
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-          <button
-            onClick={() => setLtp((p) => p + 10)}
-            className="rounded-xl border border-profit/40 bg-profit/10 py-2 font-semibold text-profit"
-          >
-            + ₹10 Ticks
-          </button>
-          <button
-            onClick={() => setLtp((p) => Math.max(0.05, p - 10))}
-            className="rounded-xl border border-loss/40 bg-loss/10 py-2 font-semibold text-loss"
-          >
-            − ₹10 Ticks
-          </button>
-          <button
-            onClick={() => close(position.sl ?? position.entry * 0.85, "sl")}
-            className="rounded-xl border border-border bg-secondary py-2 font-semibold"
-          >
-            ⚡ Trigger Stop-Loss
-          </button>
-          <button
-            onClick={() => close(position.target ?? position.entry * 1.25, "target")}
-            className="rounded-xl border border-border bg-secondary py-2 font-semibold"
-          >
-            🎯 Trigger Target Hit
-          </button>
+        {/* Live Unrealized P&L Card */}
+        <div className="p-6 bg-[#151A23] border border-[#222B3A] rounded-2xl text-center shadow-xl">
+          <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Unrealized P&L</span>
+          <div className={`text-4xl font-extrabold font-mono mt-2 transition-colors ${isProfit ? "text-emerald-400" : "text-rose-500"}`}>
+            {isProfit ? "+" : ""}₹{pnl.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="flex items-center justify-center space-x-2 mt-2 text-xs text-slate-400 font-mono">
+            <span>LTP: <strong className="text-white">₹{currentLtp.toFixed(2)}</strong></span>
+            <span className={isProfit ? "text-emerald-400" : "text-rose-400"}>
+              ({isProfit ? "+" : ""}{pnlPercent}%)
+            </span>
+          </div>
         </div>
-      </div>
 
-      <button
-        onClick={() => close(ltp, "manual")}
-        className="w-full rounded-xl bg-loss py-4 text-sm font-bold uppercase tracking-wider text-foreground transition-opacity hover:opacity-90"
-      >
-        Exit position now
-      </button>
+        {/* Position Spec Breakdown */}
+        <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-3 text-xs">
+          <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+            <div>
+              <span className="font-bold text-white text-sm">{position.symbol}</span>
+              <div className="text-[10px] text-slate-400">Order Time: {position.timestamp}</div>
+            </div>
+            <span
+              className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${
+                position.type === "BUY"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+              }`}
+            >
+              {position.type}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-slate-300">
+            <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+              <span className="text-slate-500 text-[10px] block">Position Size</span>
+              <p className="font-mono font-bold text-sm text-slate-100">
+                {position.quantity} Qty ({position.lots} {position.lots > 1 ? "Lots" : "Lot"})
+              </p>
+            </div>
+            <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+              <span className="text-slate-500 text-[10px] block">Entry Price</span>
+              <p className="font-mono font-bold text-sm text-slate-100">₹{Number(position.entryPrice).toFixed(2)}</p>
+            </div>
+            <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+              <span className="text-slate-500 text-[10px] block">Hard Stop-Loss</span>
+              <p className="font-mono font-bold text-sm text-rose-400">₹{Number(position.stopLoss).toFixed(2)}</p>
+            </div>
+            <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+              <span className="text-slate-500 text-[10px] block">Capital Deployed</span>
+              <p className="font-mono font-bold text-sm text-amber-400">
+                ₹{Number(position.capitalRequired || position.plannedRisk).toLocaleString("en-IN")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Square Off Button */}
+        <button
+          onClick={handleSquareOff}
+          className="w-full py-3.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs tracking-wider shadow-lg shadow-rose-500/20 transition-all active:scale-[0.98]"
+        >
+          {isAutoExited ? "DISMISS & RETURN TO TERMINAL" : "SQUARE OFF POSITION"}
+        </button>
+      </div>
     </div>
   );
 }
