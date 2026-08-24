@@ -86,6 +86,14 @@ const INDICES: Record<IndexType, IndexConfig> = {
   },
 };
 
+/** Approx SPAN + exposure margin blocked per lot, per index. */
+const MARGIN_PER_LOT: Record<IndexType, number> = {
+  NIFTY: 125000,
+  BANKNIFTY: 140000,
+  SENSEX: 135000,
+  FINNIFTY: 110000,
+};
+
 function Terminal() {
   const navigate = useNavigate();
   const session = useSession();
@@ -122,6 +130,14 @@ function Terminal() {
   const riskPerUnit = Math.max(0, entryPrice - stopLoss);
   const plannedRisk = totalQty * riskPerUnit;
 
+  // Margin engine: premium debit for options buying, SPAN + exposure for futures / option selling
+  const isFuturesArena = session.arena === "futures";
+  const isPremiumMode = !isFuturesArena && orderType === "BUY";
+  const marginPerLot = MARGIN_PER_LOT[selectedIndex];
+  const capitalRequired = isPremiumMode ? totalQty * entryPrice : lots * marginPerLot;
+  const marginLabel = isPremiumMode ? "Premium Amount" : "SPAN + Exposure Margin";
+  const accountBalance = session.balance;
+  const isMarginExceeded = capitalRequired > accountBalance;
 
   const dailyLimit = session.maxLoss;
   const realizedLoss = Math.max(0, -session.realized);
@@ -129,7 +145,8 @@ function Terminal() {
 
   const isRiskExceeded = plannedRisk > remainingBudget;
   const isBufferTooSmall = remainingBudget < activeIndex.lot * 5;
-  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0 && !session.locked;
+  const canExecute =
+    !isRiskExceeded && !isBufferTooSmall && !isMarginExceeded && plannedRisk > 0 && !session.locked;
 
   const handleExecute = () => {
     if (!canExecute) return;
