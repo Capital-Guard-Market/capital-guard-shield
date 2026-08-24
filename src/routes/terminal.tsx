@@ -1,370 +1,341 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Minus, Plus, ShieldCheck, X } from "lucide-react";
+import { Minus, Plus, ShieldCheck, X, AlertTriangle } from "lucide-react";
 import { TIERS, inr, useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/terminal")({
   head: () => ({
     meta: [
-      { title: "Live F&O Terminal — CapitalGuard" },
+      {
+        title: "Live F&O Terminal 🛡️ CapitalGuard",
+      },
       {
         name: "description",
-        content: "NIFTY option chain simulation with live LTPs, order tickets and risk tracking.",
-      },
-      { property: "og:title", content: "Live F&O Terminal — CapitalGuard" },
-      {
-        property: "og:description",
-        content: "Trade the simulated NIFTY option chain under your locked daily loss limit.",
+        content: "Multi-Index option chain simulation with live LTPs, order tickets, and real-time risk tracking.",
       },
     ],
   }),
   component: Terminal,
 });
 
-const SPOT = 24780.35;
-const LOT = 65;
-const CHAIN = [
-  { strike: 24600, ce: 243.5, pe: 48.2 },
-  { strike: 24700, ce: 172.8, pe: 71.6 },
-  { strike: 24800, ce: 121.9, pe: 118.4 },
-  { strike: 24900, ce: 82.35, pe: 178.9 },
-  { strike: 25000, ce: 54.1, pe: 249.7 },
-];
+type IndexType = "NIFTY" | "BANKNIFTY" | "SENSEX" | "FINNIFTY";
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      className={`relative h-6 w-11 rounded-full transition-colors ${
-        on ? "bg-primary" : "bg-secondary"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 size-5 rounded-full bg-background transition-all ${
-          on ? "left-[22px]" : "left-0.5"
-        }`}
-      />
-    </button>
-  );
+interface IndexConfig {
+  name: string;
+  spot: number;
+  lot: number;
+  step: number;
+  chain: Array<{ strike: number; ce: number; pe: number }>;
 }
 
-function Ticket({
-  strike,
-  type,
-  ltp,
-  onClose,
-}: {
-  strike: number;
-  type: "CE" | "PE";
-  ltp: number;
-  onClose: () => void;
-}) {
-  const { openPosition } = useSession();
-  const navigate = useNavigate();
-
-  const [orderType, setOrderType] = useState<"MARKET" | "LIMIT">("MARKET");
-  const [limitPrice, setLimitPrice] = useState(ltp.toFixed(2));
-  const [lots, setLots] = useState(1);
-  const [slOn, setSlOn] = useState(true);
-  const [sl, setSl] = useState((ltp * 0.85).toFixed(2));
-  const [tgtOn, setTgtOn] = useState(true);
-  const [tgt, setTgt] = useState((ltp * 1.25).toFixed(2));
-
-  const qty = lots * LOT;
-  const entry = orderType === "LIMIT" ? Number(limitPrice) || ltp : ltp;
-  const slVal = slOn ? Number(sl) || 0 : null;
-  const tgtVal = tgtOn ? Number(tgt) || 0 : null;
-  const maxRisk = slVal ? Math.max(0, (entry - slVal) * qty) : null;
-  const reward = tgtVal ? Math.max(0, (tgtVal - entry) * qty) : null;
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-background/70 p-4 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">
-              NIFTY {strike.toLocaleString("en-IN")} {type}
-            </h2>
-            <p className="text-xs text-muted-foreground">28 AUG EXPIRY</p>
-          </div>
-          <button onClick={onClose} aria-label="Close ticket">
-            <X className="size-5 text-muted-foreground" />
-          </button>
-        </div>
-
-        <p className="num mt-3 text-2xl font-bold text-primary">₹{ltp.toFixed(2)}</p>
-
-        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1">
-          {(["MARKET", "LIMIT"] as const).map((o) => (
-            <button
-              key={o}
-              onClick={() => setOrderType(o)}
-              className={`rounded-lg py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                orderType === o ? "bg-primary text-background" : "text-muted-foreground"
-              }`}
-            >
-              {o}
-            </button>
-          ))}
-        </div>
-
-        {orderType === "LIMIT" && (
-          <label className="mt-3 block">
-            <span className="text-xs text-muted-foreground">Entry price</span>
-            <input
-              type="number"
-              value={limitPrice}
-              onChange={(e) => setLimitPrice(e.target.value)}
-              className="num mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-            />
-          </label>
-        )}
-
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border px-3 py-2">
-          <div>
-            <p className="text-xs text-muted-foreground">Quantity</p>
-            <p className="num text-sm font-semibold">
-              {qty} qty · {lots} lot{lots > 1 ? "s" : ""}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLots((l) => Math.max(1, l - 1))}
-              aria-label="Decrease lots"
-              className="flex size-8 items-center justify-center rounded-lg border border-border"
-            >
-              <Minus className="size-4" />
-            </button>
-            <button
-              onClick={() => setLots((l) => l + 1)}
-              aria-label="Increase lots"
-              className="flex size-8 items-center justify-center rounded-lg border border-border"
-            >
-              <Plus className="size-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-3 space-y-3 rounded-xl border border-border p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm">Stop-loss</span>
-            <Toggle on={slOn} onChange={setSlOn} />
-          </div>
-          {slOn && (
-            <input
-              type="number"
-              value={sl}
-              onChange={(e) => setSl(e.target.value)}
-              aria-label="Stop-loss price"
-              className="num w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-loss"
-            />
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-sm">Target</span>
-            <Toggle on={tgtOn} onChange={setTgtOn} />
-          </div>
-          {tgtOn && (
-            <input
-              type="number"
-              value={tgt}
-              onChange={(e) => setTgt(e.target.value)}
-              aria-label="Target price"
-              className="num w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-profit"
-            />
-          )}
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-loss/40 bg-loss/10 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Max risk</p>
-            <p className="num text-sm font-bold text-loss">
-              {maxRisk === null ? "Unlimited" : inr(maxRisk)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-profit/40 bg-profit/10 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Potential reward
-            </p>
-            <p className="num text-sm font-bold text-profit">
-              {reward === null ? "Open" : inr(reward)}
-            </p>
-          </div>
-        </div>
-
-        <p className="num mt-3 text-xs text-muted-foreground">
-          Margin required {inr(qty * entry)}
-        </p>
-
-        <button
-          onClick={() => {
-            openPosition({
-              symbol: "NIFTY",
-              strike,
-              type,
-              side: "BUY",
-              qty,
-              entry,
-              sl: slVal,
-              target: tgtVal,
-            });
-            navigate({ to: "/position" });
-          }}
-          className="mt-5 w-full rounded-xl bg-primary py-3 text-sm font-bold uppercase tracking-wider text-background transition-opacity hover:opacity-90"
-        >
-          Execute order
-        </button>
-      </div>
-    </div>
-  );
-}
+const INDICES: Record<IndexType, IndexConfig> = {
+  NIFTY: {
+    name: "NIFTY 50",
+    spot: 24780.35,
+    lot: 65,
+    step: 50,
+    chain: [
+      { strike: 24650, ce: 198.4, pe: 54.2 },
+      { strike: 24700, ce: 162.8, pe: 71.6 },
+      { strike: 24750, ce: 131.5, pe: 92.4 },
+      { strike: 24800, ce: 104.2, pe: 118.4 },
+      { strike: 24850, ce: 81.35, pe: 148.9 },
+      { strike: 24900, ce: 62.1, pe: 184.2 },
+    ],
+  },
+  BANKNIFTY: {
+    name: "BANK NIFTY",
+    spot: 51240.8,
+    lot: 30,
+    step: 100,
+    chain: [
+      { strike: 51000, ce: 380.5, pe: 142.0 },
+      { strike: 51100, ce: 312.0, pe: 175.5 },
+      { strike: 51200, ce: 250.4, pe: 215.2 },
+      { strike: 51300, ce: 198.0, pe: 265.0 },
+      { strike: 51400, ce: 152.6, pe: 320.4 },
+      { strike: 51500, ce: 115.0, pe: 385.0 },
+    ],
+  },
+  SENSEX: {
+    name: "BSE SENSEX",
+    spot: 81350.25,
+    lot: 20,
+    step: 100,
+    chain: [
+      { strike: 81100, ce: 410.0, pe: 165.0 },
+      { strike: 81200, ce: 340.5, pe: 195.4 },
+      { strike: 81300, ce: 278.2, pe: 235.0 },
+      { strike: 81400, ce: 220.0, pe: 282.5 },
+      { strike: 81500, ce: 170.8, pe: 340.0 },
+    ],
+  },
+  FINNIFTY: {
+    name: "FIN NIFTY",
+    spot: 23420.6,
+    lot: 60,
+    step: 50,
+    chain: [
+      { strike: 23300, ce: 185.0, pe: 65.4 },
+      { strike: 23350, ce: 148.2, pe: 82.0 },
+      { strike: 23400, ce: 115.6, pe: 105.0 },
+      { strike: 23450, ce: 88.4, pe: 132.8 },
+      { strike: 23500, ce: 66.0, pe: 164.5 },
+    ],
+  },
+};
 
 function Terminal() {
-  const { tier, locked, maxLoss, balance, availableMargin, realized } = useSession();
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<{ strike: number; type: "CE" | "PE" } | null>(null);
-  const [spot, setSpot] = useState(SPOT);
+  const session = useSession();
 
-  useEffect(() => {
-    if (locked) navigate({ to: "/shield" });
-  }, [locked, navigate]);
+  const [selectedIndex, setSelectedIndex] = useState<IndexType>("NIFTY");
+  const [selectedStrike, setSelectedStrike] = useState<number>(24800);
+  const [optionSide, setOptionSide] = useState<"CE" | "PE">("CE");
+  const [orderType, setOrderType] = useState<"BUY" | "SELL">("BUY");
+  const [lots, setLots] = useState(1);
+  const [entryPrice, setEntryPrice] = useState(104.2);
+  const [stopLoss, setStopLoss] = useState(85.0);
 
-  useEffect(() => {
-    const id = setInterval(() => setSpot((s) => s + (Math.random() - 0.5) * 6), 1600);
-    return () => clearInterval(id);
-  }, []);
+  const activeIndex = INDICES[selectedIndex];
+  const totalQty = lots * activeIndex.lot;
 
-  if (locked) return null;
+  const handleIndexChange = (indexKey: IndexType) => {
+    setSelectedIndex(indexKey);
+    const newIdx = INDICES[indexKey];
+    const midStrike = newIdx.chain[Math.floor(newIdx.chain.length / 2)];
+    setSelectedStrike(midStrike.strike);
+    setEntryPrice(optionSide === "CE" ? midStrike.ce : midStrike.pe);
+    setStopLoss(Math.round((optionSide === "CE" ? midStrike.ce : midStrike.pe) * 0.8));
+  };
 
-  if (!tier) {
-    return (
-      <div className="rounded-2xl border border-warning/40 bg-warning/10 p-5">
-        <p className="text-sm text-warning">
-          You must clear the Daily Risk Gate before the terminal unlocks.
-        </p>
-        <Link to="/risk-gate" className="mt-3 inline-block text-sm font-semibold text-primary">
-          Go to risk gate →
-        </Link>
-      </div>
-    );
-  }
+  const selectContract = (strike: number, side: "CE" | "PE", price: number) => {
+    setSelectedStrike(strike);
+    setOptionSide(side);
+    setEntryPrice(price);
+    setStopLoss(Math.round(price * 0.8));
+  };
 
-  const t = TIERS[tier];
-  const chg = (((spot - 24677.2) / 24677.2) * 100).toFixed(2);
-  const lossUsed = Math.max(0, -realized);
-  const row = selected ? CHAIN.find((c) => c.strike === selected.strike) : undefined;
+  const riskPerUnit = Math.max(0, entryPrice - stopLoss);
+  const plannedRisk = totalQty * riskPerUnit;
+
+  const dailyLimit = session?.dailyLossLimit || 5000;
+  const realizedLoss = session?.totalRealizedLoss || 0;
+  const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
+
+  const isRiskExceeded = plannedRisk > remainingBudget;
+  const isBufferTooSmall = remainingBudget < activeIndex.lot * 5;
+  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0;
+
+  const handleExecute = () => {
+    if (!canExecute) return;
+    navigate({ to: "/position" });
+  };
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">NIFTY</p>
-            <p className="num text-3xl font-bold">{spot.toFixed(2)}</p>
-          </div>
-          <span className="num rounded-lg bg-profit/15 px-2 py-1 text-sm font-semibold text-profit">
-            +{chg}%
-          </span>
-        </div>
-        <p className="num mt-2 text-xs text-muted-foreground">28 AUG EXPIRY</p>
-      </div>
-
-      <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Available margin
-            </p>
-            <p className="num text-lg font-bold">
-              {inr(availableMargin)}{" "}
-              <span className="text-xs font-normal text-muted-foreground">/ {inr(balance)}</span>
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Daily realized P&amp;L
-            </p>
-            <p
-              className={`num text-lg font-bold ${realized >= 0 ? "text-profit" : "text-loss"}`}
-            >
-              {inr(realized, { sign: true })}
-            </p>
-          </div>
-        </div>
-
+    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-3 sm:p-6 pb-24">
+      {/* Top Header & Risk Telemetry */}
+      <div className="max-w-4xl mx-auto flex items-center justify-between p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl mb-4">
         <div>
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Daily loss limit used</span>
-            <span className="num">
-              {inr(lossUsed)} / {inr(maxLoss)}
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Session Risk Shield</span>
+          <div className="flex items-center space-x-2 mt-0.5">
+            <span className="text-lg font-bold text-amber-400">₹{remainingBudget.toLocaleString("en-IN")}</span>
+            <span className="text-xs text-slate-400">/ ₹{dailyLimit.toLocaleString("en-IN")}</span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <ShieldCheck className="w-5 h-5 text-emerald-400" />
+          <span className="text-xs font-semibold text-emerald-400">Active Protection</span>
+        </div>
+      </div>
+
+      {/* Multi-Index Selector Tabs */}
+      <div className="max-w-4xl mx-auto grid grid-cols-4 gap-2 mb-4">
+        {(Object.keys(INDICES) as IndexType[]).map((key) => (
+          <button
+            key={key}
+            onClick={() => handleIndexChange(key)}
+            className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center ${
+              selectedIndex === key
+                ? "bg-amber-400 text-slate-950 border-amber-400 shadow-lg shadow-amber-400/20 scale-[1.02]"
+                : "bg-[#151A23] text-slate-400 border-[#222B3A] hover:text-white"
+            }`}
+          >
+            <span>{INDICES[key].name}</span>
+            <span className={`text-[10px] mt-0.5 ${selectedIndex === key ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
+              {INDICES[key].spot.toLocaleString("en-IN")}
             </span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
-            <div
-              className="h-full rounded-full bg-loss transition-all"
-              style={{ width: `${Math.min(100, (lossUsed / maxLoss) * 100)}%` }}
-            />
-          </div>
-        </div>
+          </button>
+        ))}
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-        <ShieldCheck className="size-4 text-primary" />
-        <span className="text-primary">
-          {t.name} · max daily loss <span className="num font-semibold">{inr(maxLoss)}</span>
-        </span>
-      </div>
+      <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Option Chain Section */}
+        <div className="lg:col-span-7 bg-[#151A23] border border-[#222B3A] rounded-2xl p-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#222B3A] mb-3">
+            <div className="text-xs font-bold text-slate-300">STRIKE MATRIX</div>
+            <div className="text-[11px] text-slate-400">Lot: {activeIndex.lot} Qty</div>
+          </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="num grid grid-cols-3 border-b border-border px-4 py-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-          <span>CE LTP</span>
-          <span className="text-center">Strike</span>
-          <span className="text-right">PE LTP</span>
+          <div className="grid grid-cols-3 text-[11px] font-bold text-slate-400 text-center pb-2 border-b border-slate-800">
+            <div className="text-emerald-400">CALL (CE)</div>
+            <div>STRIKE</div>
+            <div className="text-rose-400">PUT (PE)</div>
+          </div>
+
+          <div className="space-y-1.5 mt-2">
+            {activeIndex.chain.map((row) => {
+              const isSelectedCE = selectedStrike === row.strike && optionSide === "CE";
+              const isSelectedPE = selectedStrike === row.strike && optionSide === "PE";
+              return (
+                <div key={row.strike} className="grid grid-cols-3 text-xs text-center items-center py-1">
+                  <button
+                    onClick={() => selectContract(row.strike, "CE", row.ce)}
+                    className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
+                      isSelectedCE
+                        ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30"
+                        : "bg-slate-900/60 text-emerald-400 hover:bg-slate-800"
+                    }`}
+                  >
+                    ₹{row.ce.toFixed(1)}
+                  </button>
+
+                  <div className="font-mono font-bold text-slate-300 text-sm">{row.strike}</div>
+
+                  <button
+                    onClick={() => selectContract(row.strike, "PE", row.pe)}
+                    className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
+                      isSelectedPE
+                        ? "bg-rose-500 text-slate-950 shadow-md shadow-rose-500/30"
+                        : "bg-slate-900/60 text-rose-400 hover:bg-slate-800"
+                    }`}
+                  >
+                    ₹{row.pe.toFixed(1)}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        {CHAIN.map((c) => {
-          const atm = c.strike === 24800;
-          return (
-            <div
-              key={c.strike}
-              className={`num grid w-full grid-cols-3 items-center text-sm ${
-                atm ? "bg-primary/5" : ""
-              }`}
-            >
+
+        {/* Order Ticket Section */}
+        <div className="lg:col-span-5 bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 flex flex-col justify-between">
+          <div>
+            <div className="text-xs font-bold text-slate-300 mb-3">ORDER TICKET</div>
+
+            {/* Selected Contract Info */}
+            <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 mb-3 flex items-center justify-between">
+              <div>
+                <span className="text-sm font-bold text-white">
+                  {selectedIndex} {selectedStrike} {optionSide}
+                </span>
+                <div className="text-[10px] text-slate-400">{activeIndex.name} Option</div>
+              </div>
+              <span className="text-sm font-bold font-mono text-amber-400">₹{entryPrice.toFixed(1)}</span>
+            </div>
+
+            {/* Buy / Sell Toggles */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
               <button
-                onClick={() => setSelected({ strike: c.strike, type: "CE" })}
-                className="px-4 py-3 text-left font-semibold text-profit transition-colors hover:bg-accent"
+                onClick={() => setOrderType("BUY")}
+                className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                  orderType === "BUY" ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20" : "bg-slate-900 text-slate-400"
+                }`}
               >
-                {c.ce.toFixed(2)}
+                BUY
               </button>
-              <span className="text-center font-semibold">
-                {c.strike}
-                {atm && (
-                  <span className="ml-2 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] text-primary">
-                    ATM
-                  </span>
-                )}
-              </span>
               <button
-                onClick={() => setSelected({ strike: c.strike, type: "PE" })}
-                className="px-4 py-3 text-right font-semibold text-loss transition-colors hover:bg-accent"
+                onClick={() => setOrderType("SELL")}
+                className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                  orderType === "SELL" ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20" : "bg-slate-900 text-slate-400"
+                }`}
               >
-                {c.pe.toFixed(2)}
+                SELL
               </button>
             </div>
-          );
-        })}
-      </div>
 
-      {row && selected && (
-        <Ticket
-          strike={row.strike}
-          type={selected.type}
-          ltp={selected.type === "CE" ? row.ce : row.pe}
-          onClose={() => setSelected(null)}
-        />
-      )}
+            {/* Lot Counter */}
+            <div className="flex items-center justify-between text-xs py-2 border-b border-slate-800/80">
+              <span className="text-slate-400">Lots ({activeIndex.lot} Qty/Lot)</span>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setLots(Math.max(1, lots - 1))}
+                  className="w-7 h-7 bg-slate-900 rounded text-slate-300 font-bold hover:bg-slate-800"
+                >
+                  -
+                </button>
+                <span className="w-8 text-center font-bold font-mono">{lots}</span>
+                <button
+                  onClick={() => setLots(lots + 1)}
+                  className="w-7 h-7 bg-slate-900 rounded text-slate-300 font-bold hover:bg-slate-800"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Price & SL Inputs */}
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <div>
+                <label className="text-[10px] text-slate-400">Entry Price (₹)</label>
+                <input
+                  type="number"
+                  value={entryPrice}
+                  onChange={(e) => setEntryPrice(Number(e.target.value))}
+                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400">Stop-Loss (₹)</label>
+                <input
+                  type="number"
+                  value={stopLoss}
+                  onChange={(e) => setStopLoss(Number(e.target.value))}
+                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono font-bold text-rose-400 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            {/* Planned Risk Box */}
+            <div className="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400">Planned Risk:</span>
+                <span className={`font-mono font-bold ${isRiskExceeded ? "text-rose-400" : "text-amber-400"}`}>
+                  ₹{plannedRisk.toLocaleString("en-IN")}
+                </span>
+              </div>
+
+              {isRiskExceeded && (
+                <div className="mt-2 text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-start space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    Risk of ₹{plannedRisk.toLocaleString("en-IN")} exceeds remaining limit (₹{remainingBudget.toLocaleString("en-IN")}). Reduce lots or tighten SL.
+                  </span>
+                </div>
+              )}
+
+              {isBufferTooSmall && (
+                <div className="mt-2 text-[10px] text-amber-400 bg-amber-950/40 p-2 rounded border border-amber-800/50">
+                  🛡️ Remaining shield limit is below minimum tick buffer for {selectedIndex}.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Trigger */}
+          <button
+            disabled={!canExecute}
+            onClick={handleExecute}
+            className={`w-full mt-4 py-3 rounded-xl font-bold text-xs tracking-wide transition-all ${
+              canExecute
+                ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-[0.98]"
+                : "bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800"
+            }`}
+          >
+            {isRiskExceeded ? "BLOCKED BY SHIELD" : isBufferTooSmall ? "DAILY LIMIT DEPLETED" : "EXECUTE PROTECTED ORDER"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
