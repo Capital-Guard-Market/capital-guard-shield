@@ -138,6 +138,25 @@ function Terminal() {
 
   const handleExecute = () => {
     if (!canExecute) return;
+
+    const newPosition = {
+      id: "pos_" + Date.now(),
+      index: selectedIndex,
+      symbol: `${selectedIndex} ${selectedStrike} ${optionSide}`,
+      strike: selectedStrike,
+      side: optionSide,
+      type: orderType,
+      lots,
+      quantity: totalQty,
+      entryPrice,
+      currentPrice: entryPrice,
+      stopLoss,
+      plannedRisk,
+      pnl: 0,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+
+    localStorage.setItem("capitalguard_position", JSON.stringify(newPosition));
     navigate({ to: "/position" });
   };
 
