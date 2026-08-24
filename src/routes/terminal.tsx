@@ -1,7 +1,8 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Minus, Plus, ShieldCheck, X, AlertTriangle } from "lucide-react";
-import { TIERS, inr, useSession } from "@/lib/session";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { useSession } from "@/lib/session";
+
 
 export const Route = createFileRoute("/terminal")({
   head: () => ({
@@ -104,9 +105,11 @@ function Terminal() {
     setSelectedIndex(indexKey);
     const newIdx = INDICES[indexKey];
     const midStrike = newIdx.chain[Math.floor(newIdx.chain.length / 2)];
+    if (!midStrike) return;
+    const price = optionSide === "CE" ? midStrike.ce : midStrike.pe;
     setSelectedStrike(midStrike.strike);
-    setEntryPrice(optionSide === "CE" ? midStrike.ce : midStrike.pe);
-    setStopLoss(Math.round((optionSide === "CE" ? midStrike.ce : midStrike.pe) * 0.8));
+    setEntryPrice(price);
+    setStopLoss(Math.round(price * 0.8));
   };
 
   const selectContract = (strike: number, side: "CE" | "PE", price: number) => {
@@ -119,46 +122,32 @@ function Terminal() {
   const riskPerUnit = Math.max(0, entryPrice - stopLoss);
   const plannedRisk = totalQty * riskPerUnit;
 
-  const getSessionLimit = () => {
-    if (session?.dailyLossLimit) return session.dailyLossLimit;
-    if (session?.maxLoss) return session.maxLoss;
-    if (session?.tier && (TIERS as any)?.[session.tier]?.maxLoss) {
-      return (TIERS as any)[session.tier].maxLoss;
-    }
-    return session?.arena === "futures" ? 250000 : 5000;
-  };
 
-  const dailyLimit = getSessionLimit();
-  const realizedLoss = session?.totalRealizedLoss || 0;
+  const dailyLimit = session.maxLoss;
+  const realizedLoss = Math.max(0, -session.realized);
   const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
 
   const isRiskExceeded = plannedRisk > remainingBudget;
   const isBufferTooSmall = remainingBudget < activeIndex.lot * 5;
-  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0;
+  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0 && !session.locked;
 
   const handleExecute = () => {
     if (!canExecute) return;
 
-    const newPosition = {
-      id: "pos_" + Date.now(),
-      index: selectedIndex,
-      symbol: `${selectedIndex} ${selectedStrike} ${optionSide}`,
+    session.openPosition({
+      symbol: selectedIndex,
       strike: selectedStrike,
-      side: optionSide,
-      type: orderType,
-      lots,
-      quantity: totalQty,
-      entryPrice,
-      currentPrice: entryPrice,
-      stopLoss,
-      plannedRisk,
-      pnl: 0,
-      timestamp: new Date().toLocaleTimeString(),
-    };
+      type: optionSide,
+      side: orderType,
+      qty: totalQty,
+      entry: entryPrice,
+      sl: stopLoss > 0 ? stopLoss : null,
+      target: null,
+    });
 
-    localStorage.setItem("capitalguard_position", JSON.stringify(newPosition));
     navigate({ to: "/position" });
   };
+
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-3 sm:p-6 pb-24">
