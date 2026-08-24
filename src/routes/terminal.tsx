@@ -86,6 +86,14 @@ const INDICES: Record<IndexType, IndexConfig> = {
   },
 };
 
+/** Approx SPAN + exposure margin blocked per lot, per index. */
+const MARGIN_PER_LOT: Record<IndexType, number> = {
+  NIFTY: 125000,
+  BANKNIFTY: 140000,
+  SENSEX: 135000,
+  FINNIFTY: 110000,
+};
+
 function Terminal() {
   const navigate = useNavigate();
   const session = useSession();
@@ -122,6 +130,14 @@ function Terminal() {
   const riskPerUnit = Math.max(0, entryPrice - stopLoss);
   const plannedRisk = totalQty * riskPerUnit;
 
+  // Margin engine: premium debit for options buying, SPAN + exposure for futures / option selling
+  const isFuturesArena = session.arena === "futures";
+  const isPremiumMode = !isFuturesArena && orderType === "BUY";
+  const marginPerLot = MARGIN_PER_LOT[selectedIndex];
+  const capitalRequired = isPremiumMode ? totalQty * entryPrice : lots * marginPerLot;
+  const marginLabel = isPremiumMode ? "Premium Amount" : "SPAN + Exposure Margin";
+  const accountBalance = session.balance;
+  const isMarginExceeded = capitalRequired > accountBalance;
 
   const dailyLimit = session.maxLoss;
   const realizedLoss = Math.max(0, -session.realized);
@@ -129,7 +145,8 @@ function Terminal() {
 
   const isRiskExceeded = plannedRisk > remainingBudget;
   const isBufferTooSmall = remainingBudget < activeIndex.lot * 5;
-  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0 && !session.locked;
+  const canExecute =
+    !isRiskExceeded && !isBufferTooSmall && !isMarginExceeded && plannedRisk > 0 && !session.locked;
 
   const handleExecute = () => {
     if (!canExecute) return;
@@ -315,6 +332,37 @@ function Terminal() {
 
             {/* Planned Risk Box */}
             <div className="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800">
+              <div className="flex justify-between items-center text-xs mb-1.5">
+                <span className="text-slate-400">Capital Required:</span>
+                <span className={`font-mono font-bold ${isMarginExceeded ? "text-rose-400" : "text-sky-400"}`}>
+                  ₹{capitalRequired.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] mb-2 pb-2 border-b border-slate-800">
+                <span
+                  className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${
+                    isPremiumMode
+                      ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/50"
+                      : "bg-sky-950/60 text-sky-400 border border-sky-800/50"
+                  }`}
+                >
+                  {marginLabel}
+                </span>
+                <span className="text-slate-500 font-mono">
+                  Balance ₹{accountBalance.toLocaleString("en-IN")}
+                </span>
+              </div>
+
+              {isMarginExceeded && (
+                <div className="mb-2 text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-start space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    Insufficient Account Margin — ₹{capitalRequired.toLocaleString("en-IN")} needed vs ₹
+                    {accountBalance.toLocaleString("en-IN")} available. Reduce lots.
+                  </span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-400">Planned Risk:</span>
                 <span className={`font-mono font-bold ${isRiskExceeded ? "text-rose-400" : "text-amber-400"}`}>
