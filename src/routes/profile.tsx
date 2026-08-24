@@ -8,14 +8,14 @@ import {
   Ghost, 
   HelpCircle, 
   LogOut, 
-  BookOpen, 
   Loader2, 
   ShieldCheck, 
   ArrowLeft,
   FileText,
-  TrendingUp,
   Zap,
-  Info
+  Info,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 export const Route = createFileRoute("/profile")({
@@ -28,16 +28,17 @@ export const Route = createFileRoute("/profile")({
 export function ProfilePage() {
   const navigate = useNavigate();
 
-  const [profile, setProfile] = useState({
+  const [profile] = useState({
     name: "Govind Thakur",
     email: "govind.thakur@capitalguard.internal",
     phone: "+91 98765 43210",
   });
 
   const [activeTab, setActiveTab] = useState<"overview" | "journal" | "academics">("overview");
+  const [isGhostDebtVisible, setIsGhostDebtVisible] = useState<boolean>(false);
 
-  // Load active and closed trades from memory
-  const [openPositions, setOpenPositions] = useState<any[]>(() => {
+  // Load trades from storage
+  const [openPositions] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem("capitalguard_positions");
       return saved ? JSON.parse(saved) : [];
@@ -46,7 +47,7 @@ export function ProfilePage() {
     }
   });
 
-  const [journalTrades, setJournalTrades] = useState<any[]>(() => {
+  const [journalTrades] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem("capitalguard_closed_positions");
       return saved ? JSON.parse(saved) : [];
@@ -55,7 +56,7 @@ export function ProfilePage() {
     }
   });
 
-  // Calculate live deployed capital / margin
+  // Calculate live deployed capital
   const optionsDeployed = openPositions
     .filter((p) => p.arena !== "futures")
     .reduce((acc, p) => acc + (p.capitalRequired || 0), 0);
@@ -66,6 +67,11 @@ export function ProfilePage() {
 
   const optionsRemaining = Math.max(0, 1000000 - optionsDeployed);
   const futuresRemaining = Math.max(0, 5000000 - futuresDeployed);
+
+  // Dynamic Ghost Debt: Base 60 Lakh (10L + 50L) - Net Realized P&L
+  const totalRealizedPnL = journalTrades.reduce((acc, trade) => acc + (trade.realizedPnL || 0), 0);
+  const basePool = 6000000;
+  const currentGhostDebt = basePool - totalRealizedPnL;
 
   const handleLogout = () => {
     localStorage.clear();
@@ -81,15 +87,13 @@ export function ProfilePage() {
             <ArrowLeft className="w-4 h-4" />
             <span>Return to Terminal</span>
           </Link>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Logout</span>
-            </button>
-          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Logout</span>
+          </button>
         </div>
 
         {/* User Info Card */}
@@ -108,9 +112,8 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Dual Capital Breakdown: Options Capital & Futures Margin Pool */}
+        {/* Capital Pools */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Options Capital Pool */}
           <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
@@ -123,11 +126,10 @@ export function ProfilePage() {
               ₹{optionsRemaining.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ₹10,00,000.00
             </p>
             <span className="text-[10px] text-slate-500 block">
-              Deployed in active options: ₹{optionsDeployed.toLocaleString("en-IN")}
+              Deployed in options: ₹{optionsDeployed.toLocaleString("en-IN")}
             </span>
           </div>
 
-          {/* Futures Margin Pool */}
           <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
@@ -145,19 +147,30 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Ghost Debt & Risk Floor Row */}
+        {/* Ghost Debt (Toggle Mask) & Shield Floor */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
-                <Ghost className="w-4 h-4 text-slate-400" />
-                <span>Ghost Debt</span>
+                <Ghost className="w-4 h-4 text-purple-400" />
+                <span>Ghost Debt Balance</span>
               </span>
-              <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-medium">Zero Exposure</span>
+              <button
+                onClick={() => setIsGhostDebtVisible(!isGhostDebtVisible)}
+                className="text-slate-400 hover:text-white p-1 rounded transition-colors"
+                title={isGhostDebtVisible ? "Hide Debt" : "Show Debt"}
+              >
+                {isGhostDebtVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
             </div>
-            <p className="text-sm font-normal text-slate-300 pt-0.5">
-              ₹0.00 (Protected by Hard Guardrail Shield)
+            <p className="text-sm font-normal text-slate-300 pt-0.5 tracking-wide">
+              {isGhostDebtVisible
+                ? `₹${currentGhostDebt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : "₹ ••••••••.••"}
             </p>
+            <span className="text-[10px] text-slate-500 block">
+              Base: ₹60L (Profits deduct debt, Losses add to debt)
+            </span>
           </div>
 
           <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
@@ -171,6 +184,7 @@ export function ProfilePage() {
             <p className="text-sm font-normal text-slate-300 pt-0.5">
               ₹5,000.00 Max Daily Loss Cutoff
             </p>
+            <span className="text-[10px] text-slate-500 block">Auto-liquidates if breached</span>
           </div>
         </div>
 
@@ -196,7 +210,7 @@ export function ProfilePage() {
           </button>
         </div>
 
-        {/* TAB 1: ABOUT CAPITALGUARD & IMPORTANCE */}
+        {/* TAB 1: ABOUT CAPITALGUARD */}
         {activeTab === "overview" && (
           <div className="space-y-4">
             <div className="p-5 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-3 text-xs leading-relaxed text-slate-300">
@@ -212,7 +226,6 @@ export function ProfilePage() {
               </p>
             </div>
 
-            {/* Support Box */}
             <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl flex items-center justify-between text-xs">
               <div className="flex items-center space-x-2">
                 <HelpCircle className="w-4 h-4 text-amber-400" />
@@ -228,7 +241,7 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* TAB 2: EMBEDDED TRADING JOURNAL */}
+        {/* TAB 2: EMBEDDED JOURNAL */}
         {activeTab === "journal" && (
           <div className="p-5 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#222B3A] pb-3">
@@ -275,11 +288,6 @@ export function ProfilePage() {
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 Syncing institutional risk modeling lessons, delta hedging modules, and option Greeks masterclasses.
               </p>
-            </div>
-            <div className="pt-2">
-              <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-mono text-amber-400">
-                MODULE 1: STOP-LOSS PSYCHOLOGY (85% READY)
-              </span>
             </div>
           </div>
         )}
