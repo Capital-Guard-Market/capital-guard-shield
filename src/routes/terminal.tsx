@@ -397,7 +397,13 @@ function Terminal() {
                 : "bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800"
             }`}
           >
-            {isRiskExceeded ? "BLOCKED BY SHIELD" : isBufferTooSmall ? "DAILY LIMIT DEPLETED" : "EXECUTE PROTECTED ORDER"}
+            {isMarginExceeded
+              ? "INSUFFICIENT ACCOUNT MARGIN"
+              : isRiskExceeded
+                ? "BLOCKED BY SHIELD"
+                : isBufferTooSmall
+                  ? "DAILY LIMIT DEPLETED"
+                  : "EXECUTE PROTECTED ORDER"}
           </button>
         </div>
       </div>
