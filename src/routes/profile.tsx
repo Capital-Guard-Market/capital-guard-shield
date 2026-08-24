@@ -14,7 +14,7 @@ import {
   ArrowLeft,
   FileText,
   TrendingUp,
-  BrainCircuit,
+  Zap,
   Info
 } from "lucide-react";
 
@@ -28,7 +28,6 @@ export const Route = createFileRoute("/profile")({
 export function ProfilePage() {
   const navigate = useNavigate();
 
-  // Active user details
   const [profile, setProfile] = useState({
     name: "Govind Thakur",
     email: "govind.thakur@capitalguard.internal",
@@ -37,7 +36,16 @@ export function ProfilePage() {
 
   const [activeTab, setActiveTab] = useState<"overview" | "journal" | "academics">("overview");
 
-  // Load trade journal from closed positions
+  // Load active and closed trades from memory
+  const [openPositions, setOpenPositions] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("capitalguard_positions");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   const [journalTrades, setJournalTrades] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem("capitalguard_closed_positions");
@@ -46,6 +54,18 @@ export function ProfilePage() {
       return [];
     }
   });
+
+  // Calculate live deployed capital / margin
+  const optionsDeployed = openPositions
+    .filter((p) => p.arena !== "futures")
+    .reduce((acc, p) => acc + (p.capitalRequired || 0), 0);
+
+  const futuresDeployed = openPositions
+    .filter((p) => p.arena === "futures")
+    .reduce((acc, p) => acc + (p.capitalRequired || 0), 0);
+
+  const optionsRemaining = Math.max(0, 1000000 - optionsDeployed);
+  const futuresRemaining = Math.max(0, 5000000 - futuresDeployed);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -72,7 +92,7 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* User Card */}
+        {/* User Info Card */}
         <div className="p-5 bg-[#151A23] border border-[#222B3A] rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400 font-bold text-lg">
@@ -88,22 +108,45 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Capital Leftover & Ghost Debt Metrics Card (Normal Font) */}
+        {/* Dual Capital Breakdown: Options Capital & Futures Margin Pool */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
+          {/* Options Capital Pool */}
+          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
-                <Wallet className="w-4 h-4 text-emerald-400" />
-                <span>Capitals Leftover</span>
+                <Wallet className="w-4 h-4 text-amber-400" />
+                <span>Options Arena Capital</span>
               </span>
-              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium">Available</span>
+              <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded font-medium">₹10L Max</span>
             </div>
-            {/* Value in clean normal font */}
-            <p className="text-sm font-normal text-slate-200 pt-1">
-              ₹8,45,200.00 / ₹10,00,000 (Options Arena)
+            <p className="text-sm font-normal text-slate-200">
+              ₹{optionsRemaining.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ₹10,00,000.00
             </p>
+            <span className="text-[10px] text-slate-500 block">
+              Deployed in active options: ₹{optionsDeployed.toLocaleString("en-IN")}
+            </span>
           </div>
 
+          {/* Futures Margin Pool */}
+          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
+                <Zap className="w-4 h-4 text-cyan-400" />
+                <span>Futures Arena Margin</span>
+              </span>
+              <span className="text-[10px] text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded font-medium">₹50L Max</span>
+            </div>
+            <p className="text-sm font-normal text-slate-200">
+              ₹{futuresRemaining.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ₹50,00,000.00
+            </p>
+            <span className="text-[10px] text-slate-500 block">
+              Deployed in SPAN margins: ₹{futuresDeployed.toLocaleString("en-IN")}
+            </span>
+          </div>
+        </div>
+
+        {/* Ghost Debt & Risk Floor Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
@@ -112,9 +155,21 @@ export function ProfilePage() {
               </span>
               <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-medium">Zero Exposure</span>
             </div>
-            {/* Value in normal font */}
-            <p className="text-sm font-normal text-slate-300 pt-1">
+            <p className="text-sm font-normal text-slate-300 pt-0.5">
               ₹0.00 (Protected by Hard Guardrail Shield)
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Shield Guardrail Floor</span>
+              </span>
+              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium">Active</span>
+            </div>
+            <p className="text-sm font-normal text-slate-300 pt-0.5">
+              ₹5,000.00 Max Daily Loss Cutoff
             </p>
           </div>
         </div>
@@ -209,7 +264,7 @@ export function ProfilePage() {
           </div>
         )}
 
-        {/* TAB 3: ACADEMICS (LOADING ANIMATION / MODULES) */}
+        {/* TAB 3: ACADEMICS LOADING */}
         {activeTab === "academics" && (
           <div className="p-8 bg-[#151A23] border border-[#222B3A] rounded-2xl text-center space-y-4">
             <div className="w-12 h-12 mx-auto rounded-full bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
