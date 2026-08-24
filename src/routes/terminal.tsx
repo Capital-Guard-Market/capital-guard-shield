@@ -105,9 +105,11 @@ function Terminal() {
     setSelectedIndex(indexKey);
     const newIdx = INDICES[indexKey];
     const midStrike = newIdx.chain[Math.floor(newIdx.chain.length / 2)];
+    if (!midStrike) return;
+    const price = optionSide === "CE" ? midStrike.ce : midStrike.pe;
     setSelectedStrike(midStrike.strike);
-    setEntryPrice(optionSide === "CE" ? midStrike.ce : midStrike.pe);
-    setStopLoss(Math.round((optionSide === "CE" ? midStrike.ce : midStrike.pe) * 0.8));
+    setEntryPrice(price);
+    setStopLoss(Math.round(price * 0.8));
   };
 
   const selectContract = (strike: number, side: "CE" | "PE", price: number) => {
