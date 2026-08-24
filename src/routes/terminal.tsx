@@ -128,37 +128,31 @@ function Terminal() {
     return session?.arena === "futures" ? 250000 : 5000;
   };
 
-  const dailyLimit = getSessionLimit();
-  const realizedLoss = session?.totalRealizedLoss || 0;
+  const dailyLimit = session.maxLoss;
+  const realizedLoss = Math.max(0, -session.realized);
   const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
 
   const isRiskExceeded = plannedRisk > remainingBudget;
   const isBufferTooSmall = remainingBudget < activeIndex.lot * 5;
-  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0;
+  const canExecute = !isRiskExceeded && !isBufferTooSmall && plannedRisk > 0 && !session.locked;
 
   const handleExecute = () => {
     if (!canExecute) return;
 
-    const newPosition = {
-      id: "pos_" + Date.now(),
-      index: selectedIndex,
-      symbol: `${selectedIndex} ${selectedStrike} ${optionSide}`,
+    session.openPosition({
+      symbol: selectedIndex,
       strike: selectedStrike,
-      side: optionSide,
-      type: orderType,
-      lots,
-      quantity: totalQty,
-      entryPrice,
-      currentPrice: entryPrice,
-      stopLoss,
-      plannedRisk,
-      pnl: 0,
-      timestamp: new Date().toLocaleTimeString(),
-    };
+      type: optionSide,
+      side: orderType,
+      qty: totalQty,
+      entry: entryPrice,
+      sl: stopLoss > 0 ? stopLoss : null,
+      target: null,
+    });
 
-    localStorage.setItem("capitalguard_position", JSON.stringify(newPosition));
     navigate({ to: "/position" });
   };
+
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-3 sm:p-6 pb-24">
