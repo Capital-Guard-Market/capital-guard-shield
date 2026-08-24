@@ -119,14 +119,6 @@ function Terminal() {
   const riskPerUnit = Math.max(0, entryPrice - stopLoss);
   const plannedRisk = totalQty * riskPerUnit;
 
-  const getSessionLimit = () => {
-    if (session?.dailyLossLimit) return session.dailyLossLimit;
-    if (session?.maxLoss) return session.maxLoss;
-    if (session?.tier && (TIERS as any)?.[session.tier]?.maxLoss) {
-      return (TIERS as any)[session.tier].maxLoss;
-    }
-    return session?.arena === "futures" ? 250000 : 5000;
-  };
 
   const dailyLimit = session.maxLoss;
   const realizedLoss = Math.max(0, -session.realized);
