@@ -1,6 +1,17 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { ShieldCheck, AlertTriangle, Building2, TrendingUp, Search, X } from "lucide-react";
+import { 
+  ShieldCheck, 
+  AlertTriangle, 
+  Building2, 
+  TrendingUp, 
+  Search, 
+  X, 
+  ArrowLeft, 
+  LogOut, 
+  RefreshCw,
+  Briefcase
+} from "lucide-react";
 import { TIERS, useSession } from "@/lib/session";
 import { INDICES_DATA, STOCKS_DATA, generateStrikeChain, FnoInstrument } from "@/lib/fnoCatalog";
 
@@ -8,7 +19,7 @@ export const Route = createFileRoute("/terminal")({
   head: () => ({
     meta: [
       { title: "Live F&O Terminal 🛡️ CapitalGuard" },
-      { name: "description", content: "Complete 180+ F&O simulator with live strike chains, search, and dynamic margin protection." },
+      { name: "description", content: "Complete 180+ F&O simulator with navigation controls and margin protection." },
     ],
   }),
   component: Terminal,
@@ -17,6 +28,10 @@ export const Route = createFileRoute("/terminal")({
 function Terminal() {
   const navigate = useNavigate();
   const session = useSession();
+
+  const [currentArena, setCurrentArena] = useState<"options" | "futures">(
+    (session?.arena as "options" | "futures") || "options"
+  );
 
   const [activeSegment, setActiveSegment] = useState<"INDICES" | "STOCKS">("INDICES");
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,6 +43,17 @@ function Terminal() {
   const [lots, setLots] = useState(1);
   const [entryPrice, setEntryPrice] = useState(104.2);
   const [stopLoss, setStopLoss] = useState(85.0);
+
+  const [openPositionsCount, setOpenPositionsCount] = useState(0);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("capitalguard_positions");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setOpenPositionsCount(Array.isArray(parsed) ? parsed.length : 0);
+      }
+    } catch (e) {}
+  }, []);
 
   const availableInstruments = useMemo(() => {
     const list = activeSegment === "INDICES" ? INDICES_DATA : STOCKS_DATA;
@@ -51,7 +77,7 @@ function Terminal() {
   }, [activeInstrument]);
 
   const totalQty = lots * activeInstrument.lot;
-  const isFuturesArena = session?.arena === "futures";
+  const isFuturesArena = currentArena === "futures";
   const virtualBalance = isFuturesArena ? 5000000 : 1000000;
 
   const isMarginOrder = isFuturesArena || orderType === "SELL";
@@ -81,12 +107,17 @@ function Terminal() {
 
   const handleSelectInstrument = (inst: FnoInstrument) => {
     setSelectedSymbol(inst.symbol);
-    const newChain = generateStrikeChain(inst.spot, inst.step);
-    const mid = newChain[Math.floor(newChain.length / 2)];
-    setSelectedStrike(mid.strike);
-    const initPrice = optionSide === "CE" ? mid.ce : mid.pe;
-    setEntryPrice(initPrice);
-    setStopLoss(Math.round(initPrice * 0.8 * 10) / 10);
+    if (currentArena === "futures") {
+      setEntryPrice(inst.spot);
+      setStopLoss(Math.round(inst.spot * 0.985 * 10) / 10);
+    } else {
+      const newChain = generateStrikeChain(inst.spot, inst.step);
+      const mid = newChain[Math.floor(newChain.length / 2)];
+      setSelectedStrike(mid.strike);
+      const initPrice = optionSide === "CE" ? mid.ce : mid.pe;
+      setEntryPrice(initPrice);
+      setStopLoss(Math.round(initPrice * 0.8 * 10) / 10);
+    }
   };
 
   const selectContract = (strike: number, side: "CE" | "PE", price: number) => {
@@ -101,9 +132,12 @@ function Terminal() {
 
     const newPosition = {
       id: "pos_" + Date.now(),
-      index: activeInstrument.symbol,
-      symbol: `${activeInstrument.symbol} ${selectedStrike} ${optionSide}`,
-      strike: selectedStrike,
+      arena: currentArena,
+      segment: activeInstrument.segment,
+      symbol: currentArena === "futures" 
+        ? `${activeInstrument.symbol} FUT`
+        : `${activeInstrument.symbol} ${selectedStrike} ${optionSide}`,
+      strike: currentArena === "futures" ? activeInstrument.spot : selectedStrike,
       side: optionSide,
       type: orderType,
       lots,
@@ -117,12 +151,73 @@ function Terminal() {
       timestamp: new Date().toLocaleTimeString(),
     };
 
-    localStorage.setItem("capitalguard_position", JSON.stringify(newPosition));
+    try {
+      const existing = localStorage.getItem("capitalguard_positions");
+      const list = existing ? JSON.parse(existing) : [];
+      list.push(newPosition);
+      localStorage.setItem("capitalguard_positions", JSON.stringify(list));
+    } catch (e) {
+      localStorage.setItem("capitalguard_positions", JSON.stringify([newPosition]));
+    }
+
     navigate({ to: "/position" });
+  };
+
+  const handleExitToHome = () => {
+    navigate({ to: "/" });
   };
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-3 sm:p-6 pb-24">
+      {/* Top Global Navigation Bar */}
+      <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2 p-3 bg-[#151A23] border border-[#222B3A] rounded-2xl mb-3 shadow-md">
+        <div className="flex items-center space-x-2">
+          <Link
+            to="/arena"
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-700 transition-all"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Arenas</span>
+          </Link>
+
+          <button
+            onClick={() => {
+              const nextArena = currentArena === "options" ? "futures" : "options";
+              setCurrentArena(nextArena);
+              if (nextArena === "futures") {
+                setEntryPrice(activeInstrument.spot);
+                setStopLoss(Math.round(activeInstrument.spot * 0.985 * 10) / 10);
+              } else {
+                setEntryPrice(104.2);
+                setStopLoss(85.0);
+              }
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-400 text-xs font-bold hover:bg-amber-400/20 transition-all"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Mode: {isFuturesArena ? "Futures Arena" : "Options Arena"}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Link
+            to="/position"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all"
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            <span>Positions ({openPositionsCount})</span>
+          </Link>
+
+          <button
+            onClick={handleExitToHome}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Exit to Home</span>
+          </button>
+        </div>
+      </div>
+
       {/* Session Telemetry Header */}
       <div className="max-w-5xl mx-auto flex items-center justify-between p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl mb-4">
         <div>
@@ -135,7 +230,9 @@ function Terminal() {
           </div>
         </div>
         <div className="text-right">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Virtual Capital</span>
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+            {isFuturesArena ? "Virtual Margin" : "Virtual Capital"}
+          </span>
           <div className="text-sm font-bold font-mono text-slate-200">₹{virtualBalance.toLocaleString("en-IN")}</div>
         </div>
       </div>
@@ -217,51 +314,64 @@ function Terminal() {
       </div>
 
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Dynamic Strike Chain Matrix */}
+        {/* Strike Chain Matrix OR Futures Direct Panel */}
         <div className="lg:col-span-7 bg-[#151A23] border border-[#222B3A] rounded-2xl p-4">
           <div className="flex items-center justify-between pb-3 border-b border-[#222B3A] mb-3">
             <div>
               <span className="text-xs font-bold text-white uppercase">{activeInstrument.name}</span>
               <span className="text-[10px] text-slate-400 ml-2 font-mono">Spot: ₹{activeInstrument.spot.toLocaleString("en-IN")}</span>
             </div>
-            <div className="text-[11px] text-slate-400 font-mono">Lot Size: {activeInstrument.lot}</div>
+            <div className="text-[11px] text-slate-400 font-mono">Lot Size: {activeInstrument.lot} Qty</div>
           </div>
 
-          <div className="grid grid-cols-3 text-[11px] font-bold text-slate-400 text-center pb-2 border-b border-slate-800">
-            <div className="text-emerald-400">CALL (CE)</div>
-            <div>STRIKE</div>
-            <div className="text-rose-400">PUT (PE)</div>
-          </div>
+          {currentArena === "futures" ? (
+            <div className="p-6 bg-slate-900/60 rounded-xl border border-slate-800 text-center space-y-3">
+              <div className="text-xs uppercase tracking-wider text-slate-400 font-bold">Underlying Futures Contract</div>
+              <div className="text-2xl font-bold font-mono text-white">{activeInstrument.symbol} CURRENT MONTH FUT</div>
+              <div className="text-sm font-mono text-emerald-400 font-bold">₹{activeInstrument.spot.toLocaleString("en-IN")}</div>
+              <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                Trading Futures utilizes linear margin deployment (₹{(activeInstrument.marginPerLot / 100000).toFixed(2)}L/lot) with standardized tick movements.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 text-[11px] font-bold text-slate-400 text-center pb-2 border-b border-slate-800">
+                <div className="text-emerald-400">CALL (CE)</div>
+                <div>STRIKE</div>
+                <div className="text-rose-400">PUT (PE)</div>
+              </div>
 
-          <div className="space-y-1.5 mt-2">
-            {chain.map((row) => {
-              const isCE = selectedStrike === row.strike && optionSide === "CE";
-              const isPE = selectedStrike === row.strike && optionSide === "PE";
-              return (
-                <div key={row.strike} className="grid grid-cols-3 text-xs text-center items-center py-1">
-                  <button
-                    onClick={() => selectContract(row.strike, "CE", row.ce)}
-                    className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
-                      isCE ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30" : "bg-slate-900/60 text-emerald-400 hover:bg-slate-800"
-                    }`}
-                  >
-                    ₹{row.ce.toFixed(1)}
-                  </button>
+              <div className="space-y-1.5 mt-2">
+                {chain.map((row) => {
+                  const isCE = selectedStrike === row.strike && optionSide === "CE";
+                  const isPE = selectedStrike === row.strike && optionSide === "PE";
+                  return (
+                    <div key={row.strike} className="grid grid-cols-3 text-xs text-center items-center py-1">
+                      <button
+                        onClick={() => selectContract(row.strike, "CE", row.ce)}
+                        className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
+                          isCE ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30" : "bg-slate-900/60 text-emerald-400 hover:bg-slate-800"
+                        }`}
+                      >
+                        ₹{row.ce.toFixed(1)}
+                      </button>
 
-                  <div className="font-mono font-bold text-slate-300 text-sm">{row.strike}</div>
+                      <div className="font-mono font-bold text-slate-300 text-sm">{row.strike}</div>
 
-                  <button
-                    onClick={() => selectContract(row.strike, "PE", row.pe)}
-                    className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
-                      isPE ? "bg-rose-500 text-slate-950 shadow-md shadow-rose-500/30" : "bg-slate-900/60 text-rose-400 hover:bg-slate-800"
-                    }`}
-                  >
-                    ₹{row.pe.toFixed(1)}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                      <button
+                        onClick={() => selectContract(row.strike, "PE", row.pe)}
+                        className={`py-2 px-2 rounded-lg font-mono font-bold transition-all ${
+                          isPE ? "bg-rose-500 text-slate-950 shadow-md shadow-rose-500/30" : "bg-slate-900/60 text-rose-400 hover:bg-slate-800"
+                        }`}
+                      >
+                        ₹{row.pe.toFixed(1)}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Order Ticket */}
@@ -271,8 +381,12 @@ function Terminal() {
 
             <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 mb-3 flex items-center justify-between">
               <div>
-                <span className="text-sm font-bold text-white">{activeInstrument.symbol} {selectedStrike} {optionSide}</span>
-                <div className="text-[10px] text-slate-400">{activeInstrument.name} • {activeInstrument.segment}</div>
+                <span className="text-sm font-bold text-white">
+                  {currentArena === "futures" ? `${activeInstrument.symbol} FUT` : `${activeInstrument.symbol} ${selectedStrike} ${optionSide}`}
+                </span>
+                <div className="text-[10px] text-slate-400">
+                  {activeInstrument.name} • {currentArena === "futures" ? "Futures Contract" : "Options Contract"}
+                </div>
               </div>
               <span className="text-sm font-bold font-mono text-amber-400">₹{entryPrice.toFixed(1)}</span>
             </div>

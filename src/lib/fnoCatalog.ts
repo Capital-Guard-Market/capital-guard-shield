@@ -108,9 +108,6 @@ export const STOCKS_DATA: FnoInstrument[] = [
   { symbol: "DMART", name: "Avenue Supermarts", segment: "STOCKS", sector: "Retail", spot: 4800.0, lot: 150, step: 50, marginPerLot: 165000 },
 ];
 
-/**
- * Procedurally generates realistic Option Strike chains around the spot price
- */
 export function generateStrikeChain(spot: number, step: number) {
   const atmBase = Math.round(spot / step) * step;
   const chain = [];
@@ -119,7 +116,6 @@ export function generateStrikeChain(spot: number, step: number) {
     const strike = atmBase + offset * step;
     const moneyness = (strike - spot) / spot;
     
-    // Approximate Black-Scholes pricing
     const baseAtmPrem = spot * 0.015;
     const ce = Math.max(1.5, Number((Math.max(0, spot - strike) + baseAtmPrem * Math.exp(-moneyness * 4)).toFixed(1)));
     const pe = Math.max(1.5, Number((Math.max(0, strike - spot) + baseAtmPrem * Math.exp(moneyness * 4)).toFixed(1)));
