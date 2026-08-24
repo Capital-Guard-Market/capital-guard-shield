@@ -10,16 +10,18 @@ import {
   ArrowLeft, 
   LogOut, 
   RefreshCw,
-  Briefcase
+  Briefcase,
+  User,
+  Lock
 } from "lucide-react";
-import { TIERS, useSession } from "@/lib/session";
+import { useSession } from "@/lib/session";
 import { INDICES_DATA, STOCKS_DATA, generateStrikeChain, FnoInstrument } from "@/lib/fnoCatalog";
 
 export const Route = createFileRoute("/terminal")({
   head: () => ({
     meta: [
       { title: "Live F&O Terminal 🛡️ CapitalGuard" },
-      { name: "description", content: "Complete 180+ F&O simulator with navigation controls and margin protection." },
+      { name: "description", content: "Mandatory stop-loss protected F&O simulator." },
     ],
   }),
   component: Terminal,
@@ -30,7 +32,7 @@ function Terminal() {
   const session = useSession();
 
   const [currentArena, setCurrentArena] = useState<"options" | "futures">(
-    (session?.arena as "options" | "futures") || "options"
+    (localStorage.getItem("capitalguard_arena") as "options" | "futures") || "options"
   );
 
   const [activeSegment, setActiveSegment] = useState<"INDICES" | "STOCKS">("INDICES");
@@ -41,9 +43,10 @@ function Terminal() {
   const [optionSide, setOptionSide] = useState<"CE" | "PE">("CE");
   const [orderType, setOrderType] = useState<"BUY" | "SELL">("BUY");
   const [lots, setLots] = useState(1);
-  const [entryPrice, setEntryPrice] = useState(104.2);
-  const [stopLoss, setStopLoss] = useState(85.0);
+  const [entryPrice, setEntryPrice] = useState<number>(104.2);
+  const [stopLoss, setStopLoss] = useState<number>(85.0);
 
+  // Position count for top badge
   const [openPositionsCount, setOpenPositionsCount] = useState(0);
   useEffect(() => {
     try {
@@ -85,25 +88,20 @@ function Terminal() {
     ? lots * activeInstrument.marginPerLot
     : totalQty * entryPrice;
 
-  const riskPerUnit = Math.max(0, entryPrice - stopLoss);
-  const plannedRisk = isMarginOrder ? totalQty * (entryPrice * 0.015) : totalQty * riskPerUnit;
+  // STRICT MANDATORY STOP-LOSS VALIDATIONS
+  const isSlMissing = !stopLoss || stopLoss <= 0 || isNaN(stopLoss);
+  const isSlInvalid = orderType === "BUY" ? stopLoss >= entryPrice : stopLoss <= entryPrice;
+  const riskPerUnit = orderType === "BUY" ? Math.max(0, entryPrice - stopLoss) : Math.max(0, stopLoss - entryPrice);
+  const plannedRisk = totalQty * riskPerUnit;
 
-  const getSessionLimit = () => {
-    if (session?.dailyLossLimit) return session.dailyLossLimit;
-    if (session?.maxLoss) return session.maxLoss;
-    if (session?.tier && (TIERS as any)?.[session.tier]?.maxLoss) {
-      return (TIERS as any)[session.tier].maxLoss;
-    }
-    return isFuturesArena ? 250000 : 5000;
-  };
-
-  const dailyLimit = getSessionLimit();
+  // Read Guardrail Floor
+  const dailyLimit = Number(localStorage.getItem("capitalguard_guardrail_limit")) || 5000;
   const realizedLoss = session?.totalRealizedLoss || 0;
   const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
 
   const isRiskExceeded = plannedRisk > remainingBudget;
   const isInsufficientCapital = capitalRequired > virtualBalance;
-  const canExecute = !isRiskExceeded && !isInsufficientCapital && capitalRequired > 0;
+  const canExecute = !isSlMissing && !isSlInvalid && !isRiskExceeded && !isInsufficientCapital && capitalRequired > 0;
 
   const handleSelectInstrument = (inst: FnoInstrument) => {
     setSelectedSymbol(inst.symbol);
@@ -163,10 +161,6 @@ function Terminal() {
     navigate({ to: "/position" });
   };
 
-  const handleExitToHome = () => {
-    navigate({ to: "/" });
-  };
-
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-3 sm:p-6 pb-24">
       {/* Top Global Navigation Bar */}
@@ -184,6 +178,7 @@ function Terminal() {
             onClick={() => {
               const nextArena = currentArena === "options" ? "futures" : "options";
               setCurrentArena(nextArena);
+              localStorage.setItem("capitalguard_arena", nextArena);
               if (nextArena === "futures") {
                 setEntryPrice(activeInstrument.spot);
                 setStopLoss(Math.round(activeInstrument.spot * 0.985 * 10) / 10);
@@ -208,13 +203,13 @@ function Terminal() {
             <span>Positions ({openPositionsCount})</span>
           </Link>
 
-          <button
-            onClick={handleExitToHome}
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all"
+          <Link
+            to="/profile"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-700 transition-all"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Exit to Home</span>
-          </button>
+            <User className="w-3.5 h-3.5" />
+            <span>Profile</span>
+          </Link>
         </div>
       </div>
 
@@ -226,12 +221,12 @@ function Terminal() {
           </span>
           <div className="flex items-center space-x-2 mt-0.5">
             <span className="text-lg font-bold text-amber-400">₹{remainingBudget.toLocaleString("en-IN")}</span>
-            <span className="text-xs text-slate-400">/ ₹{dailyLimit.toLocaleString("en-IN")} Max Loss</span>
+            <span className="text-xs text-slate-400">/ ₹{dailyLimit.toLocaleString("en-IN")} Max Loss Shield</span>
           </div>
         </div>
         <div className="text-right">
           <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">
-            {isFuturesArena ? "Virtual Margin" : "Virtual Capital"}
+            {isFuturesArena ? "Virtual Margin Pool" : "Virtual Capital"}
           </span>
           <div className="text-sm font-bold font-mono text-slate-200">₹{virtualBalance.toLocaleString("en-IN")}</div>
         </div>
@@ -275,7 +270,7 @@ function Terminal() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`Search in ${activeSegment === "INDICES" ? "Indices" : "180+ F&O Stocks"} (e.g., RELIANCE, ZOMATO, TATA, SBIN)...`}
+              placeholder={`Search 180+ F&O symbols (RELIANCE, ZOMATO, SBIN)...`}
               className="w-full pl-9 pr-8 py-2.5 bg-[#151A23] border border-[#222B3A] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
             />
             {searchQuery && (
@@ -314,7 +309,7 @@ function Terminal() {
       </div>
 
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Strike Chain Matrix OR Futures Direct Panel */}
+        {/* Dynamic Strike Chain Matrix OR Futures Direct Panel */}
         <div className="lg:col-span-7 bg-[#151A23] border border-[#222B3A] rounded-2xl p-4">
           <div className="flex items-center justify-between pb-3 border-b border-[#222B3A] mb-3">
             <div>
@@ -330,7 +325,7 @@ function Terminal() {
               <div className="text-2xl font-bold font-mono text-white">{activeInstrument.symbol} CURRENT MONTH FUT</div>
               <div className="text-sm font-mono text-emerald-400 font-bold">₹{activeInstrument.spot.toLocaleString("en-IN")}</div>
               <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                Trading Futures utilizes linear margin deployment (₹{(activeInstrument.marginPerLot / 100000).toFixed(2)}L/lot) with standardized tick movements.
+                Margin per Lot: ₹{(activeInstrument.marginPerLot / 100000).toFixed(2)} Lakh. Mandatory Stop-loss enforces maximum downside control.
               </p>
             </div>
           ) : (
@@ -385,7 +380,7 @@ function Terminal() {
                   {currentArena === "futures" ? `${activeInstrument.symbol} FUT` : `${activeInstrument.symbol} ${selectedStrike} ${optionSide}`}
                 </span>
                 <div className="text-[10px] text-slate-400">
-                  {activeInstrument.name} • {currentArena === "futures" ? "Futures Contract" : "Options Contract"}
+                  {activeInstrument.name} • {currentArena === "futures" ? "Futures" : "Options"}
                 </div>
               </div>
               <span className="text-sm font-bold font-mono text-amber-400">₹{entryPrice.toFixed(1)}</span>
@@ -421,7 +416,7 @@ function Terminal() {
 
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div>
-                <label className="text-[10px] text-slate-400">Entry Price (₹)</label>
+                <label className="text-[10px] text-slate-400 font-bold">Entry Price (₹)</label>
                 <input
                   type="number"
                   value={entryPrice}
@@ -430,44 +425,55 @@ function Terminal() {
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-400">Stop-Loss (₹)</label>
+                <label className="text-[10px] text-amber-400 font-bold flex items-center space-x-1">
+                  <Lock className="w-3 h-3" />
+                  <span>Mandatory Stop-Loss (₹)</span>
+                </label>
                 <input
                   type="number"
-                  value={stopLoss}
+                  value={stopLoss || ""}
                   onChange={(e) => setStopLoss(Number(e.target.value))}
-                  className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono font-bold text-rose-400 focus:outline-none focus:border-rose-500"
+                  placeholder="Required SL"
+                  className={`w-full mt-1 px-3 py-2 bg-slate-900 border rounded-lg text-xs font-mono font-bold text-rose-400 focus:outline-none ${
+                    isSlMissing || isSlInvalid ? "border-rose-500" : "border-slate-800 focus:border-rose-500"
+                  }`}
                 />
               </div>
             </div>
 
+            {/* Validation & Risk Box */}
             <div className="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
               <div className="grid grid-cols-2 gap-2 pb-2 border-b border-slate-800 text-xs">
                 <div>
-                  <span className="text-[10px] text-slate-400 block">{isMarginOrder ? "SPAN Margin Required" : "Upfront Premium Needed"}</span>
+                  <span className="text-[10px] text-slate-400 block">{isMarginOrder ? "SPAN Margin Required" : "Premium Required"}</span>
                   <span className="font-mono font-bold text-white text-sm">₹{capitalRequired.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-                  <span className="text-[9px] text-slate-500 block">
-                    {isMarginOrder ? `₹${(activeInstrument.marginPerLot / 100000).toFixed(2)}L/lot` : `${totalQty} Qty × ₹${entryPrice}`}
-                  </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Planned Risk (Max SL)</span>
+                  <span className="text-[10px] text-slate-400 block">Planned SL Risk</span>
                   <span className={`font-mono font-bold text-sm ${isRiskExceeded ? "text-rose-400" : "text-amber-400"}`}>
                     ₹{plannedRisk.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                   </span>
-                  <span className="text-[9px] text-slate-500 block">Against Daily Guardrail</span>
                 </div>
               </div>
+
+              {/* Stop loss alerts */}
+              {isSlMissing && (
+                <div className="text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Stop-Loss is strictly mandatory to protect capital.</span>
+                </div>
+              )}
+
+              {isSlInvalid && !isSlMissing && (
+                <div className="text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50">
+                  {orderType === "BUY" ? "Stop-loss must be below entry price." : "Stop-loss must be above entry price."}
+                </div>
+              )}
 
               {isRiskExceeded && (
                 <div className="text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50 flex items-start space-x-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>Risk ₹{plannedRisk.toLocaleString("en-IN")} exceeds remaining limit (₹{remainingBudget.toLocaleString("en-IN")}).</span>
-                </div>
-              )}
-
-              {isInsufficientCapital && (
-                <div className="text-[10px] text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-800/50">
-                  ⚠️ Insufficient virtual capital (Required: ₹{capitalRequired.toLocaleString("en-IN")} | Available: ₹{virtualBalance.toLocaleString("en-IN")}).
+                  <span>SL Risk ₹{plannedRisk.toLocaleString("en-IN")} breaches remaining shield limit (₹{remainingBudget.toLocaleString("en-IN")}).</span>
                 </div>
               )}
             </div>
@@ -482,7 +488,15 @@ function Terminal() {
                 : "bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800"
             }`}
           >
-            {isInsufficientCapital ? "INSUFFICIENT CAPITAL" : isRiskExceeded ? "BLOCKED BY SHIELD" : "EXECUTE PROTECTED ORDER"}
+            {isSlMissing 
+              ? "STOP-LOSS REQUIRED" 
+              : isSlInvalid 
+              ? "INVALID STOP-LOSS PRICE" 
+              : isRiskExceeded 
+              ? "RISK EXCEEDS SHIELD LIMIT" 
+              : isInsufficientCapital 
+              ? "INSUFFICIENT CAPITAL" 
+              : "EXECUTE PROTECTED ORDER"}
           </button>
         </div>
       </div>

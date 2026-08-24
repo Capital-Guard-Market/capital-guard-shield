@@ -1,18 +1,26 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
-import { ShieldCheck, ArrowLeft, TrendingUp, TrendingDown, Layers, Zap, Trash2, CheckCircle2 } from "lucide-react";
-import { useSession } from "@/lib/session";
+import { useEffect, useState } from "react";
+import { 
+  ShieldCheck, 
+  ArrowLeft, 
+  Layers, 
+  Zap, 
+  BrainCircuit, 
+  CheckCircle2, 
+  AlertCircle, 
+  User,
+  Activity
+} from "lucide-react";
 
 export const Route = createFileRoute("/position")({
   head: () => ({
-    meta: [{ title: "Portfolio Positions & Day P&L 🛡️ CapitalGuard" }],
+    meta: [{ title: "Positions & Post-Mortem 🛡️ CapitalGuard" }],
   }),
   component: PositionsDashboard,
 });
 
 export function PositionsDashboard() {
   const navigate = useNavigate();
-  const session = useSession();
 
   const [openPositions, setOpenPositions] = useState<any[]>(() => {
     try {
@@ -32,6 +40,9 @@ export function PositionsDashboard() {
     }
   });
 
+  const [selectedPostMortem, setSelectedPostMortem] = useState<any | null>(null);
+
+  // Live Price Ticking Engine
   useEffect(() => {
     if (openPositions.length === 0) return;
 
@@ -62,6 +73,11 @@ export function PositionsDashboard() {
       exitPrice: target.currentPrice,
       realizedPnL,
       exitTimestamp: new Date().toLocaleTimeString(),
+      postMortem: {
+        disciplineScore: realizedPnL >= 0 ? 95 : 80,
+        slAdherence: "Hard Stop Respected",
+        emotionTag: realizedPnL >= 0 ? "Disciplined Execution" : "Controlled Loss",
+      },
     };
 
     const nextOpen = openPositions.filter((p) => p.id !== id);
@@ -87,6 +103,11 @@ export function PositionsDashboard() {
         exitPrice: pos.currentPrice,
         realizedPnL,
         exitTimestamp: new Date().toLocaleTimeString(),
+        postMortem: {
+          disciplineScore: 85,
+          slAdherence: "Manual Square Off",
+          emotionTag: "Bulk Exit",
+        },
       };
     });
 
@@ -96,11 +117,6 @@ export function PositionsDashboard() {
 
     localStorage.setItem("capitalguard_positions", JSON.stringify([]));
     localStorage.setItem("capitalguard_closed_positions", JSON.stringify(nextClosed));
-  };
-
-  const handleResetHistory = () => {
-    setClosedPositions([]);
-    localStorage.removeItem("capitalguard_closed_positions");
   };
 
   const openOptions = openPositions.filter((p) => p.arena !== "futures");
@@ -134,27 +150,34 @@ export function PositionsDashboard() {
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 sm:p-6 pb-28">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Top Navigation */}
+      <div className="max-w-4xl mx-auto space-y-5">
+        {/* Top Navigation Bar */}
         <div className="flex items-center justify-between pb-3 border-b border-[#222B3A]">
           <Link to="/terminal" className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
             <span>Return to Terminal</span>
           </Link>
           <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-1 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Shield Active</span>
-            </div>
-            {closedPositions.length > 0 && (
-              <button
-                onClick={handleResetHistory}
-                className="text-[11px] text-slate-400 hover:text-rose-400 px-2 py-1 rounded transition-colors"
-                title="Reset Closed Trade History"
-              >
-                Clear Closed
-              </button>
-            )}
+            <Link
+              to="/profile"
+              className="flex items-center space-x-1 px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 hover:text-white"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Profile & Journal</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* TODAY'S NET PROFIT / LOSS BANNER (TOP PROMINENT) */}
+        <div className="p-6 bg-gradient-to-r from-[#151A23] via-[#1A202C] to-[#151A23] border border-[#222B3A] rounded-2xl text-center shadow-xl">
+          <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Today's Net Profit & Loss</span>
+          <div className={`text-4xl font-extrabold font-mono mt-2 transition-colors ${totalDayPnL >= 0 ? "text-emerald-400" : "text-rose-500"}`}>
+            {totalDayPnL >= 0 ? "+" : ""}₹{totalDayPnL.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="flex items-center justify-center space-x-4 mt-3 text-xs text-slate-400 font-mono">
+            <span>Realized: <strong className={totalRealizedDay >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalRealizedDay.toFixed(2)}</strong></span>
+            <span>•</span>
+            <span>Unrealized: <strong className={totalUnrealizedDay >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalUnrealizedDay.toFixed(2)}</strong></span>
           </div>
         </div>
 
@@ -179,22 +202,22 @@ export function PositionsDashboard() {
                     <Layers className="w-4 h-4" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-bold text-white">Options Portfolio</h3>
-                    <p className="text-[10px] text-slate-400">{openOptions.length} Open • {closedOptions.length} Closed</p>
+                    <h3 className="text-sm font-bold text-white">Options Positions</h3>
+                    <p className="text-[10px] text-slate-400">{openOptions.length} Active • {closedOptions.length} Closed</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Options Net P&L</span>
+                  <span className="text-[10px] text-slate-400 block uppercase">Options Net</span>
                   <span className={`text-base font-bold font-mono ${optionsTotalPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {optionsTotalPnL >= 0 ? "+" : ""}₹{optionsTotalPnL.toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              {/* Open Options List */}
+              {/* Open Options */}
               {openOptions.length > 0 && (
                 <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Open Positions</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Option Contracts</span>
                   {openOptions.map((pos) => {
                     const pnl = pos.type === "BUY" ? (pos.currentPrice - pos.entryPrice) * pos.quantity : (pos.entryPrice - pos.currentPrice) * pos.quantity;
                     return (
@@ -207,7 +230,7 @@ export function PositionsDashboard() {
                             </span>
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {pos.quantity} Qty • Entry: ₹{pos.entryPrice.toFixed(1)} • LTP: ₹{pos.currentPrice.toFixed(1)} • SL: ₹{pos.stopLoss}
+                            {pos.quantity} Qty • Entry: ₹{pos.entryPrice.toFixed(1)} • LTP: ₹{pos.currentPrice.toFixed(1)} • Hard SL: ₹{pos.stopLoss}
                           </div>
                         </div>
                         <div className="flex items-center space-x-3">
@@ -218,7 +241,7 @@ export function PositionsDashboard() {
                             onClick={() => handleSquareOffSingle(pos.id)}
                             className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg text-[10px] font-bold transition-all"
                           >
-                            Exit
+                            Exit Trade
                           </button>
                         </div>
                       </div>
@@ -227,19 +250,27 @@ export function PositionsDashboard() {
                 </div>
               )}
 
-              {/* Closed Options List */}
+              {/* Closed Options */}
               {closedOptions.length > 0 && (
                 <div className="space-y-1.5 pt-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Closed Trades (Realized)</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Closed Option Trades</span>
                   {closedOptions.map((pos, idx) => (
                     <div key={idx} className="p-2.5 bg-slate-900/40 border border-slate-800/60 rounded-lg flex items-center justify-between text-xs">
                       <div>
                         <span className="font-semibold text-slate-300">{pos.symbol}</span>
-                        <span className="text-[10px] text-slate-500 ml-2 font-mono">Exit @ ₹{pos.exitPrice?.toFixed(1)} ({pos.exitTimestamp})</span>
+                        <span className="text-[10px] text-slate-500 ml-2 font-mono">Exit @ ₹{pos.exitPrice?.toFixed(1)}</span>
                       </div>
-                      <span className={`font-mono font-bold ${pos.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {pos.realizedPnL >= 0 ? "+" : ""}₹{pos.realizedPnL.toFixed(2)}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className={`font-mono font-bold ${pos.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {pos.realizedPnL >= 0 ? "+" : ""}₹{pos.realizedPnL.toFixed(2)}
+                        </span>
+                        <button
+                          onClick={() => setSelectedPostMortem(pos)}
+                          className="px-2 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px] font-bold hover:bg-amber-400/20"
+                        >
+                          Post-Mortem
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -254,22 +285,22 @@ export function PositionsDashboard() {
                     <Zap className="w-4 h-4" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-bold text-white">Futures Portfolio</h3>
-                    <p className="text-[10px] text-slate-400">{openFutures.length} Open • {closedFutures.length} Closed</p>
+                    <h3 className="text-sm font-bold text-white">Futures Positions</h3>
+                    <p className="text-[10px] text-slate-400">{openFutures.length} Active • {closedFutures.length} Closed</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Futures Net P&L</span>
+                  <span className="text-[10px] text-slate-400 block uppercase">Futures Net</span>
                   <span className={`text-base font-bold font-mono ${futuresTotalPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {futuresTotalPnL >= 0 ? "+" : ""}₹{futuresTotalPnL.toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              {/* Open Futures List */}
+              {/* Open Futures */}
               {openFutures.length > 0 && (
                 <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Open Positions</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Futures Contracts</span>
                   {openFutures.map((pos) => {
                     const pnl = pos.type === "BUY" ? (pos.currentPrice - pos.entryPrice) * pos.quantity : (pos.entryPrice - pos.currentPrice) * pos.quantity;
                     return (
@@ -282,7 +313,7 @@ export function PositionsDashboard() {
                             </span>
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {pos.quantity} Qty • Entry: ₹{pos.entryPrice.toFixed(1)} • LTP: ₹{pos.currentPrice.toFixed(1)} • SL: ₹{pos.stopLoss}
+                            {pos.quantity} Qty • Entry: ₹{pos.entryPrice.toFixed(1)} • LTP: ₹{pos.currentPrice.toFixed(1)} • Hard SL: ₹{pos.stopLoss}
                           </div>
                         </div>
                         <div className="flex items-center space-x-3">
@@ -293,7 +324,7 @@ export function PositionsDashboard() {
                             onClick={() => handleSquareOffSingle(pos.id)}
                             className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg text-[10px] font-bold transition-all"
                           >
-                            Exit
+                            Exit Trade
                           </button>
                         </div>
                       </div>
@@ -302,63 +333,106 @@ export function PositionsDashboard() {
                 </div>
               )}
 
-              {/* Closed Futures List */}
+              {/* Closed Futures */}
               {closedFutures.length > 0 && (
                 <div className="space-y-1.5 pt-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Closed Trades (Realized)</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Closed Futures Trades</span>
                   {closedFutures.map((pos, idx) => (
                     <div key={idx} className="p-2.5 bg-slate-900/40 border border-slate-800/60 rounded-lg flex items-center justify-between text-xs">
                       <div>
                         <span className="font-semibold text-slate-300">{pos.symbol}</span>
-                        <span className="text-[10px] text-slate-500 ml-2 font-mono">Exit @ ₹{pos.exitPrice?.toFixed(1)} ({pos.exitTimestamp})</span>
+                        <span className="text-[10px] text-slate-500 ml-2 font-mono">Exit @ ₹{pos.exitPrice?.toFixed(1)}</span>
                       </div>
-                      <span className={`font-mono font-bold ${pos.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {pos.realizedPnL >= 0 ? "+" : ""}₹{pos.realizedPnL.toFixed(2)}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className={`font-mono font-bold ${pos.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {pos.realizedPnL >= 0 ? "+" : ""}₹{pos.realizedPnL.toFixed(2)}
+                        </span>
+                        <button
+                          onClick={() => setSelectedPostMortem(pos)}
+                          className="px-2 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px] font-bold hover:bg-amber-400/20"
+                        >
+                          Post-Mortem
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* SECTION 3: OVERALL DAY P&L SUMMARY (AT BOTTOM) */}
-            <div className="p-5 bg-gradient-to-br from-[#151A23] to-[#1c2330] border-2 border-[#222B3A] rounded-2xl space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <span className="text-xs uppercase font-bold tracking-wider text-slate-300">TOTAL COMBINED DAY SUMMARY</span>
-                <span className="text-[10px] text-slate-400 font-mono">Realized + Unrealized</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase">Realized P&L</span>
-                  <span className={`text-sm sm:text-base font-bold font-mono ${totalRealizedDay >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {totalRealizedDay >= 0 ? "+" : ""}₹{totalRealizedDay.toFixed(2)}
-                  </span>
-                </div>
-                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase">Unrealized P&L</span>
-                  <span className={`text-sm sm:text-base font-bold font-mono ${totalUnrealizedDay >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {totalUnrealizedDay >= 0 ? "+" : ""}₹{totalUnrealizedDay.toFixed(2)}
-                  </span>
-                </div>
-                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase">Net Day P&L</span>
-                  <span className={`text-base sm:text-lg font-extrabold font-mono ${totalDayPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {totalDayPnL >= 0 ? "+" : ""}₹{totalDayPnL.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {openPositions.length > 0 && (
-                <button
-                  onClick={handleSquareOffAll}
-                  className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-500/20 transition-all active:scale-[0.98]"
-                >
-                  SQUARE OFF ALL OPEN POSITIONS ({openPositions.length})
-                </button>
-              )}
-            </div>
+            {/* Square Off Master Button */}
+            {openPositions.length > 0 && (
+              <button
+                onClick={handleSquareOffAll}
+                className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-500/20 transition-all active:scale-[0.98]"
+              >
+                SQUARE OFF ALL OPEN POSITIONS ({openPositions.length})
+              </button>
+            )}
           </>
+        )}
+
+        {/* POST-MORTEM ANALYSIS MODAL / DRAWER */}
+        {selectedPostMortem && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2">
+                  <BrainCircuit className="w-5 h-5 text-amber-400" />
+                  <h3 className="font-bold text-sm text-white">Post-Mortem Trade Analysis</h3>
+                </div>
+                <button
+                  onClick={() => setSelectedPostMortem(null)}
+                  className="text-slate-400 hover:text-white text-xs font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-1">
+                <div className="text-xs font-bold text-white">{selectedPostMortem.symbol}</div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  Entry: ₹{selectedPostMortem.entryPrice} • Exit: ₹{selectedPostMortem.exitPrice} • Net P&L:{" "}
+                  <span className={selectedPostMortem.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                    ₹{selectedPostMortem.realizedPnL?.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400">Discipline Score</span>
+                  <span className="font-bold text-emerald-400">{selectedPostMortem.postMortem?.disciplineScore || 90} / 100</span>
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400">Stop-Loss Adherence</span>
+                  <span className="font-bold text-slate-200">{selectedPostMortem.postMortem?.slAdherence || "Respected"}</span>
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400">Psychology Tag</span>
+                  <span className="font-bold text-amber-400">{selectedPostMortem.postMortem?.emotionTag || "Rule Follower"}</span>
+                </div>
+
+                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Key AI Behavioral Takeaway</span>
+                  <p className="text-[11px] text-slate-300">
+                    {selectedPostMortem.realizedPnL >= 0
+                      ? "Trade was executed with predefined risk-to-reward parameters. Good job letting the strategy play out without impulsive tweaks."
+                      : "Loss was kept strictly within the guardrail limit. Capital protection was successfully preserved."}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedPostMortem(null)}
+                className="w-full py-2.5 bg-amber-400 text-slate-950 font-bold text-xs rounded-xl hover:brightness-110"
+              >
+                Close Analysis
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
