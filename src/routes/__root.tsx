@@ -10,6 +10,7 @@ import {
 import { TrendingUp, User, Bookmark, Briefcase } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
+import { SessionProvider } from "@/lib/session";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -81,6 +82,7 @@ function RootComponent() {
   ];
 
   return (
+    <SessionProvider>
     <div className="flex min-h-screen flex-col justify-between bg-background font-sans text-foreground selection:bg-primary selection:text-primary-foreground">
       {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
 
@@ -118,5 +120,6 @@ function RootComponent() {
         </div>
       </nav>
     </div>
+    </SessionProvider>
   );
 }
