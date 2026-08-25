@@ -72,7 +72,7 @@ function Terminal() {
 
   const activeInstrument: FnoInstrument = useMemo(() => {
     const all = [...INDICES_DATA, ...STOCKS_DATA];
-    return all.find((i) => i.symbol === selectedSymbol) || INDICES_DATA[0];
+    return all.find((i) => i.symbol === selectedSymbol) ?? (INDICES_DATA[0] as FnoInstrument);
   }, [selectedSymbol]);
 
   const chain = useMemo(() => {
@@ -96,7 +96,7 @@ function Terminal() {
 
   // Read Guardrail Floor
   const dailyLimit = Number(localStorage.getItem("capitalguard_guardrail_limit")) || 5000;
-  const realizedLoss = session?.totalRealizedLoss || 0;
+  const realizedLoss = Math.max(0, -(session?.realized ?? 0));
   const remainingBudget = Math.max(0, dailyLimit - realizedLoss);
 
   const isRiskExceeded = plannedRisk > remainingBudget;
@@ -111,6 +111,7 @@ function Terminal() {
     } else {
       const newChain = generateStrikeChain(inst.spot, inst.step);
       const mid = newChain[Math.floor(newChain.length / 2)];
+      if (!mid) return;
       setSelectedStrike(mid.strike);
       const initPrice = optionSide === "CE" ? mid.ce : mid.pe;
       setEntryPrice(initPrice);
@@ -240,7 +241,7 @@ function Terminal() {
               onClick={() => {
                 setActiveSegment("INDICES");
                 setSearchQuery("");
-                handleSelectInstrument(INDICES_DATA[0]);
+                handleSelectInstrument(INDICES_DATA[0] as FnoInstrument);
               }}
               className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
                 activeSegment === "INDICES" ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20" : "text-slate-400 hover:text-white"
@@ -253,7 +254,7 @@ function Terminal() {
               onClick={() => {
                 setActiveSegment("STOCKS");
                 setSearchQuery("");
-                handleSelectInstrument(STOCKS_DATA[0]);
+                handleSelectInstrument(STOCKS_DATA[0] as FnoInstrument);
               }}
               className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
                 activeSegment === "STOCKS" ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20" : "text-slate-400 hover:text-white"
