@@ -32,7 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (splash)
     return (
       <SplashScreen
-        onDone={() => {
+        onFinish={() => {
           sessionStorage.setItem("cg_splash_seen", "1");
           setSplash(false);
         }}
