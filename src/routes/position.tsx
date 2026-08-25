@@ -6,8 +6,9 @@ import {
   TrendingDown, 
   AlertTriangle, 
   ChevronLeft, 
-  Trash2,
-  Activity
+  Activity, 
+  Flame, 
+  Zap 
 } from "lucide-react";
 
 export const Route = createFileRoute("/position")({
@@ -18,8 +19,7 @@ interface Position {
   id: string;
   symbol: string;
   baseSymbol?: string;
-  arena: "options" | "futures";
-  segment?: string;
+  arena: "FUTURES" | "OPTIONS";
   orderSide: "BUY" | "SELL";
   lots: number;
   lotSize: number;
@@ -35,24 +35,21 @@ interface Position {
 
 export function PositionsComponent() {
   const [positions, setPositions] = useState<Position[]>([]);
-  const [dailyLimit, setDailyLimit] = useState<number>(5000);
-  const [arena, setArena] = useState<string>("options");
+  const [dailyLimit, setDailyLimit] = useState<number>(50000);
+  const [filterMode, setFilterMode] = useState<"ALL" | "FUTURES" | "OPTIONS">("ALL");
 
-  // Load positions
   useEffect(() => {
     try {
       const saved = localStorage.getItem("capitalguard_positions");
-      const limit = Number(localStorage.getItem("capitalguard_daily_limit")) || 5000;
-      const savedArena = localStorage.getItem("capitalguard_arena") || "options";
+      const limit = Number(localStorage.getItem("capitalguard_daily_limit")) || 50000;
       setDailyLimit(limit);
-      setArena(savedArena);
 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Normalize position data to prevent NaN
           const normalized = parsed.map((p) => ({
             ...p,
+            arena: (p.arena || "OPTIONS").toUpperCase() as "FUTURES" | "OPTIONS",
             lots: Number(p.lots) || 1,
             lotSize: Number(p.lotSize) || 50,
             quantity: Number(p.quantity) || (Number(p.lots) || 1) * (Number(p.lotSize) || 50),
@@ -68,7 +65,7 @@ export function PositionsComponent() {
     } catch (e) {}
   }, []);
 
-  // ⚡ 1.5-Second Live Price Momentum Engine
+  // ⚡ Live Momentum Tick Engine
   useEffect(() => {
     const interval = setInterval(() => {
       setPositions((prev) => {
@@ -76,7 +73,6 @@ export function PositionsComponent() {
         const updated = prev.map((pos) => {
           if (pos.status === "CLOSED") return pos;
 
-          // Jitter -0.15% to +0.15%
           const jitterPercent = (Math.random() * 0.3 - 0.15) / 100;
           const newPrice = Number(Math.max(0.05, pos.currentPrice * (1 + jitterPercent)).toFixed(2));
           
@@ -85,7 +81,6 @@ export function PositionsComponent() {
             (pos.orderSide === "BUY" ? newPrice - pos.entryPrice : pos.entryPrice - newPrice) * qty
           );
 
-          // Auto Stop-Loss Hit Trigger
           const slTriggered = pos.orderSide === "BUY" ? newPrice <= pos.stopLoss : newPrice >= pos.stopLoss;
 
           hasChanged = true;
@@ -109,12 +104,18 @@ export function PositionsComponent() {
     return () => clearInterval(interval);
   }, []);
 
-  const openPositions = positions.filter((p) => p.status === "OPEN");
-  const closedPositions = positions.filter((p) => p.status === "CLOSED");
+  const filteredPositions = positions.filter((p) => {
+    if (filterMode === "ALL") return true;
+    return p.arena === filterMode;
+  });
 
-  const totalUnrealized = openPositions.reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
-  const totalRealized = closedPositions.reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
-  const netPnL = totalUnrealized + totalRealized;
+  const openPositions = filteredPositions.filter((p) => p.status === "OPEN");
+  const closedPositions = filteredPositions.filter((p) => p.status === "CLOSED");
+
+  // Combined calculations across ALL positions
+  const totalUnrealized = positions.filter(p => p.status === "OPEN").reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
+  const totalRealized = positions.filter(p => p.status === "CLOSED").reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
+  const combinedNetPnL = totalUnrealized + totalRealized;
 
   const handleSquareOff = (id: string) => {
     const updated = positions.map((p) => (p.id === id ? { ...p, status: "CLOSED" as const } : p));
@@ -144,22 +145,46 @@ export function PositionsComponent() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
             <Activity className="w-3.5 h-3.5 animate-pulse" />
-            <span>TICK ENGINE LIVE</span>
+            <span>UNIFIED TICK ENGINE</span>
           </div>
         </div>
       </div>
 
-      {/* Hero PnL Banner */}
+      {/* Hero Combined PnL Banner */}
       <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-6 text-center shadow-xl space-y-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">TODAY&apos;S NET PROFIT &amp; LOSS</span>
-        <div className={`text-3xl sm:text-4xl font-mono font-black ${netPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-          {netPnL >= 0 ? `+₹${netPnL.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `-₹${Math.abs(netPnL).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          COMBINED F&amp;O PROFIT &amp; LOSS (SIMULTANEOUS BOOK)
+        </span>
+        <div className={`text-3xl sm:text-4xl font-mono font-black ${combinedNetPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+          {combinedNetPnL >= 0 ? `+₹${combinedNetPnL.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `-₹${Math.abs(combinedNetPnL).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         </div>
         <div className="flex justify-center gap-6 text-xs font-mono text-slate-400 pt-1">
           <span>Realized: <b className={totalRealized >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalRealized.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></span>
           <span>•</span>
           <span>Unrealized: <b className={totalUnrealized >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalUnrealized.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></span>
         </div>
+      </div>
+
+      {/* Filter Tabs: ALL, FUTURES, OPTIONS */}
+      <div className="flex items-center gap-2 bg-[#151A23] p-1 rounded-xl border border-[#222B3A] w-fit">
+        <button
+          onClick={() => setFilterMode("ALL")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${filterMode === "ALL" ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:text-white"}`}
+        >
+          All Contracts ({positions.filter(p => p.status === "OPEN").length})
+        </button>
+        <button
+          onClick={() => setFilterMode("FUTURES")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${filterMode === "FUTURES" ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:text-white"}`}
+        >
+          Futures Only ({positions.filter(p => p.arena === "FUTURES" && p.status === "OPEN").length})
+        </button>
+        <button
+          onClick={() => setFilterMode("OPTIONS")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${filterMode === "OPTIONS" ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:text-white"}`}
+        >
+          Options Only ({positions.filter(p => p.arena === "OPTIONS" && p.status === "OPEN").length})
+        </button>
       </div>
 
       {/* Open Positions List */}
@@ -173,14 +198,14 @@ export function PositionsComponent() {
               onClick={handleSquareOffAll}
               className="text-xs font-bold text-rose-400 hover:text-rose-300 underline underline-offset-4"
             >
-              Square Off All
+              Square Off All ({openPositions.length})
             </button>
           )}
         </div>
 
         {openPositions.length === 0 ? (
           <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-8 text-center text-slate-500 text-xs">
-            No active open trades. Place orders from the Terminal.
+            No active open trades in this category. Place orders in the F&amp;O Terminal.
           </div>
         ) : (
           openPositions.map((pos) => (
@@ -191,6 +216,11 @@ export function PositionsComponent() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-black text-white text-sm">{pos.symbol}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    pos.arena === "FUTURES" ? "bg-sky-500/10 text-sky-400 border border-sky-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                  }`}>
+                    {pos.arena}
+                  </span>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                     pos.orderSide === "BUY" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
                   }`}>
@@ -224,7 +254,7 @@ export function PositionsComponent() {
       {closedPositions.length > 0 && (
         <div className="space-y-3 pt-3">
           <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">
-            Closed Positions ({closedPositions.length})
+            Closed Positions History ({closedPositions.length})
           </h2>
           {closedPositions.map((pos) => (
             <div
@@ -232,7 +262,7 @@ export function PositionsComponent() {
               className="bg-[#151A23]/60 border border-[#222B3A] rounded-2xl p-3.5 flex items-center justify-between opacity-80"
             >
               <div>
-                <span className="font-bold text-white text-xs">{pos.symbol}</span>
+                <span className="font-bold text-white text-xs">{pos.symbol} ({pos.arena})</span>
                 <span className="text-[10px] text-slate-500 font-mono block">
                   Closed • Entry: ₹{pos.entryPrice} • Exit: ₹{pos.currentPrice}
                 </span>

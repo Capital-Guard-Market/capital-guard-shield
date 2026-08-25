@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet, Link, useLocation, HeadContent, Scripts } from "@tanstack/react-router";
-import { TrendingUp, User, Bookmark, Briefcase, ShieldCheck, Lock } from "lucide-react";
+import { TrendingUp, User, Bookmark, Briefcase, ShieldCheck, Lock, PieChart, Flame } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
 import { SessionProvider } from "@/hooks/useSession";
@@ -9,7 +9,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" },
-      { title: "CapitalGuard 🛡️ Unbreachable Risk Engine" },
+      { title: "CapitalGuard 🛡️ Institutional Risk & Investment Terminal" },
     ],
     scripts: [
       { src: "https://cdn.tailwindcss.com" }
@@ -22,7 +22,6 @@ function RootDocument() {
   const location = useLocation();
   const [openCount, setOpenCount] = useState(0);
   const [showSplash, setShowSplash] = useState(true);
-  const [activeArena, setActiveArena] = useState("options");
 
   useEffect(() => {
     const hasSeenSplash = sessionStorage.getItem("capitalguard_splash_seen");
@@ -44,15 +43,14 @@ function RootDocument() {
         const openTrades = Array.isArray(parsed) ? parsed.filter((p: any) => p.status !== "CLOSED") : [];
         setOpenCount(openTrades.length);
       }
-      const arena = localStorage.getItem("capitalguard_arena") || "options";
-      setActiveArena(arena);
     } catch (e) {}
   }, [location.pathname]);
 
   const navItems = [
-    { label: "Terminal", to: "/terminal", icon: TrendingUp },
-    { label: "Positions", to: "/position", icon: Briefcase, badge: openCount > 0 ? openCount : null },
-    { label: "Arenas & Risk", to: "/arena", icon: Bookmark },
+    { label: "F&O Terminal", to: "/terminal", icon: TrendingUp },
+    { label: "Positions (Unified)", to: "/position", icon: Briefcase, badge: openCount > 0 ? openCount : null },
+    { label: "Investments (Home)", to: "/equity", icon: PieChart },
+    { label: "Gateway & Arenas", to: "/arena", icon: Bookmark },
     { label: "Profile", to: "/profile", icon: User },
   ];
 
@@ -76,19 +74,23 @@ function RootDocument() {
           {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
 
           <div className="flex flex-col md:flex-row min-h-screen">
-            {/* 🖥️ DESKTOP LEFT VERTICAL SIDEBAR */}
+            
+            {/* 🖥️ DESKTOP LEFT VERTICAL SIDEBAR WITH LOGO */}
             <aside className="hidden md:flex flex-col w-64 bg-[#151A23] border-r border-[#222B3A] p-5 shrink-0 fixed inset-y-0 left-0 z-30 justify-between">
               <div className="space-y-6">
+                
+                {/* Brand Logo & Wordmark */}
                 <div className="flex items-center gap-3 px-2 py-1">
-                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <div className="p-2 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(251,191,36,0.2)]">
                     <ShieldCheck className="w-6 h-6" />
                   </div>
                   <div>
-                    <h1 className="font-black tracking-wider text-sm text-white uppercase">CapitalGuard</h1>
-                    <p className="text-[10px] text-amber-400 font-mono font-bold tracking-tight">UNBREACHABLE SHIELD</p>
+                    <h1 className="font-black tracking-wider text-sm text-white uppercase">CAPITALGUARD</h1>
+                    <p className="text-[10px] text-amber-400 font-mono font-bold tracking-tight">UNBREACHABLE RISK</p>
                   </div>
                 </div>
 
+                {/* Navigation Items */}
                 <nav className="space-y-1.5">
                   {navItems.map((item) => {
                     const isActive = location.pathname === item.to;
@@ -120,15 +122,28 @@ function RootDocument() {
                 </nav>
               </div>
 
-              <div className="bg-[#0B0E14] border border-[#222B3A] rounded-xl p-3.5 space-y-1.5">
-                <div className="flex items-center gap-2 text-amber-400 text-[11px] font-bold">
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Guardrail Shield Active</span>
+              {/* Bottom Quick Switch Mode Card */}
+              <div className="bg-[#0B0E14] border border-[#222B3A] rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                  <span>QUICK SWITCH REALM</span>
+                  <Lock className="w-3 h-3 text-amber-400" />
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  Mode: <span className="text-white font-semibold capitalize">{activeArena} Arena</span>
-                </p>
-                <p className="text-[9px] text-slate-500 font-mono">Floor locked until 12:00 AM</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Link
+                    to="/equity"
+                    className="py-2 rounded-lg bg-[#151A23] hover:border-emerald-400 border border-[#222B3A] text-center text-[10px] font-bold text-emerald-400 flex items-center justify-center gap-1"
+                  >
+                    <PieChart className="w-3 h-3" />
+                    <span>Home</span>
+                  </Link>
+                  <Link
+                    to="/terminal"
+                    className="py-2 rounded-lg bg-[#151A23] hover:border-amber-400 border border-[#222B3A] text-center text-[10px] font-bold text-amber-400 flex items-center justify-center gap-1"
+                  >
+                    <Flame className="w-3 h-3" />
+                    <span>Arena</span>
+                  </Link>
+                </div>
               </div>
             </aside>
 
@@ -138,7 +153,7 @@ function RootDocument() {
             </main>
 
             {/* 📱 MOBILE BOTTOM DOCK */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#151A23]/95 backdrop-blur-md border-t border-[#222B3A] py-2 px-6 max-w-lg mx-auto">
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#151A23]/95 backdrop-blur-md border-t border-[#222B3A] py-2 px-4 max-w-lg mx-auto">
               <div className="flex justify-around items-center">
                 {navItems.map((item) => {
                   const isActive = location.pathname === item.to;
@@ -147,7 +162,7 @@ function RootDocument() {
                     <Link
                       key={item.label}
                       to={item.to}
-                      className={`flex flex-col items-center space-y-1 relative py-1 px-3 rounded-xl transition-all ${
+                      className={`flex flex-col items-center space-y-1 relative py-1 px-2.5 rounded-xl transition-all ${
                         isActive ? "text-amber-400 font-bold" : "text-slate-400 hover:text-slate-200"
                       }`}
                     >
@@ -159,7 +174,7 @@ function RootDocument() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] tracking-tight">{item.label}</span>
+                      <span className="text-[9px] tracking-tight">{item.label.split(" ")[0]}</span>
                     </Link>
                   );
                 })}
