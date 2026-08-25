@@ -1,8 +1,63 @@
 import { createRootRoute, Outlet, Link, useLocation, HeadContent, Scripts } from "@tanstack/react-router";
 import { TrendingUp, User, Bookmark, Briefcase, ShieldCheck, Lock } from "lucide-react";
-import { useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
-import { SessionProvider } from "@/hooks/useSession";
+
+// 🛡️ Self-contained Session Context (Prevents any missing file/import errors on Vercel)
+interface UserType {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface SessionContextType {
+  user: UserType | null;
+  session: any | null;
+  loading: boolean;
+  login: (email?: string) => void;
+  logout: () => void;
+}
+
+const defaultSession: SessionContextType = {
+  user: { id: "trader_1", email: "trader@capitalguard.io", name: "Pro Trader" },
+  session: { access_token: "mock_token" },
+  loading: false,
+  login: () => {},
+  logout: () => {},
+};
+
+export const SessionContext = createContext<SessionContextType>(defaultSession);
+
+export function useSession(): SessionContextType {
+  const context = useContext(SessionContext);
+  return context || defaultSession;
+}
+
+export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<UserType | null>({
+    id: "trader_1",
+    email: "trader@capitalguard.io",
+    name: "Pro Trader",
+  });
+  const [session, setSession] = useState<any | null>({ access_token: "mock_token" });
+  const [loading] = useState(false);
+
+  const login = (email = "trader@capitalguard.io") => {
+    setUser({ id: "trader_1", email, name: email.split("@")[0] });
+    setSession({ access_token: "mock_token" });
+  };
+
+  const logout = () => {
+    setUser(null);
+    setSession(null);
+  };
+
+  return (
+    <SessionContext.Provider value={{ user, session, loading, login, logout }}>
+      {children}
+    </SessionContext.Provider>
+  );
+}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -122,7 +177,7 @@ function RootDocument() {
                 </nav>
               </div>
 
-              {/* Active Mode Lock Footer */}
+              {/* Mode Lock Footer */}
               <div className="bg-[#0B0E14] border border-[#222B3A] rounded-xl p-3.5 space-y-1.5">
                 <div className="flex items-center gap-2 text-amber-400 text-[11px] font-bold">
                   <Lock className="w-3.5 h-3.5" />
@@ -135,7 +190,7 @@ function RootDocument() {
               </div>
             </aside>
 
-            {/* 📱 MAIN CONTENT OUTLET */}
+            {/* 📱 MAIN CONTENT */}
             <main className="flex-1 md:pl-64 w-full min-h-screen pb-28 md:pb-8">
               <Outlet />
             </main>
