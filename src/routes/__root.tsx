@@ -2,6 +2,7 @@ import { createRootRoute, Outlet, Link, useLocation, HeadContent, Scripts } from
 import { TrendingUp, User, Bookmark, Briefcase, ShieldCheck, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SplashScreen } from "@/components/SplashScreen";
+import { SessionProvider } from "@/hooks/useSession";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -70,101 +71,105 @@ function RootDocument() {
           }
         `}} />
       </head>
-      <body className="bg-[#0B0E14] text-slate-100 min-h-screen flex flex-col md:flex-row font-sans selection:bg-amber-400 selection:text-slate-950">
-        {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
+      <body className="bg-[#0B0E14] text-slate-100 min-h-screen font-sans selection:bg-amber-400 selection:text-slate-950">
+        <SessionProvider>
+          {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
 
-        {/* 🖥️ DESKTOP LEFT VERTICAL SIDEBAR */}
-        <aside className="hidden md:flex flex-col w-64 bg-[#151A23] border-r border-[#222B3A] p-5 shrink-0 fixed inset-y-0 left-0 z-30 justify-between">
-          <div className="space-y-6">
-            {/* Logo */}
-            <div className="flex items-center gap-3 px-2 py-1">
-              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="font-black tracking-wider text-sm text-white uppercase">CapitalGuard</h1>
-                <p className="text-[10px] text-amber-400 font-mono font-bold tracking-tight">UNBREACHABLE SHIELD</p>
-              </div>
-            </div>
+          <div className="flex flex-col md:flex-row min-h-screen">
+            {/* 🖥️ DESKTOP LEFT VERTICAL SIDEBAR */}
+            <aside className="hidden md:flex flex-col w-64 bg-[#151A23] border-r border-[#222B3A] p-5 shrink-0 fixed inset-y-0 left-0 z-30 justify-between">
+              <div className="space-y-6">
+                {/* Logo */}
+                <div className="flex items-center gap-3 px-2 py-1">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h1 className="font-black tracking-wider text-sm text-white uppercase">CapitalGuard</h1>
+                    <p className="text-[10px] text-amber-400 font-mono font-bold tracking-tight">UNBREACHABLE SHIELD</p>
+                  </div>
+                </div>
 
-            {/* Nav Links */}
-            <nav className="space-y-1.5">
-              {navItems.map((item) => {
-                const isActive = location.pathname === item.to;
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    className={`flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-bold transition-all ${
-                      isActive
-                        ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20"
-                        : "text-slate-400 hover:text-white hover:bg-[#0B0E14]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className="w-4 h-4" />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                        isActive ? "bg-slate-950 text-amber-400" : "bg-emerald-500 text-slate-950"
-                      }`}>
-                        {item.badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+                {/* Nav Links */}
+                <nav className="space-y-1.5">
+                  {navItems.map((item) => {
+                    const isActive = location.pathname === item.to;
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.label}
+                        to={item.to}
+                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-bold transition-all ${
+                          isActive
+                            ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20"
+                            : "text-slate-400 hover:text-white hover:bg-[#0B0E14]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge && (
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            isActive ? "bg-slate-950 text-amber-400" : "bg-emerald-500 text-slate-950"
+                          }`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* Active Mode Lock Footer */}
+              <div className="bg-[#0B0E14] border border-[#222B3A] rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center gap-2 text-amber-400 text-[11px] font-bold">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Guardrail Shield Active</span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Mode: <span className="text-white font-semibold capitalize">{activeArena} Arena</span>
+                </p>
+                <p className="text-[9px] text-slate-500 font-mono">Floor locked until 12:00 AM</p>
+              </div>
+            </aside>
+
+            {/* 📱 MAIN CONTENT OUTLET */}
+            <main className="flex-1 md:pl-64 w-full min-h-screen pb-28 md:pb-8">
+              <Outlet />
+            </main>
+
+            {/* 📱 MOBILE BOTTOM DOCK */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#151A23]/95 backdrop-blur-md border-t border-[#222B3A] py-2 px-6 max-w-lg mx-auto">
+              <div className="flex justify-around items-center">
+                {navItems.map((item) => {
+                  const isActive = location.pathname === item.to;
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.label}
+                      to={item.to}
+                      className={`flex flex-col items-center space-y-1 relative py-1 px-3 rounded-xl transition-all ${
+                        isActive ? "text-amber-400 font-bold" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      <div className="relative">
+                        <Icon className={`w-5 h-5 ${isActive ? "text-amber-400" : "text-slate-400"}`} />
+                        {item.badge && (
+                          <span className="absolute -top-1.5 -right-2.5 bg-emerald-500 text-slate-950 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ring-2 ring-[#151A23]">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] tracking-tight">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </nav>
           </div>
-
-          {/* Active Mode Lock Footer */}
-          <div className="bg-[#0B0E14] border border-[#222B3A] rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2 text-amber-400 text-[11px] font-bold">
-              <Lock className="w-3.5 h-3.5" />
-              <span>Guardrail Shield Active</span>
-            </div>
-            <p className="text-[10px] text-slate-400">
-              Mode: <span className="text-white font-semibold capitalize">{activeArena} Arena</span>
-            </p>
-            <p className="text-[9px] text-slate-500 font-mono">Floor locked until 12:00 AM</p>
-          </div>
-        </aside>
-
-        {/* 📱 MAIN CONTENT OUTLET */}
-        <main className="flex-1 md:pl-64 w-full min-h-screen pb-28 md:pb-8">
-          <Outlet />
-        </main>
-
-        {/* 📱 MOBILE BOTTOM DOCK */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#151A23]/95 backdrop-blur-md border-t border-[#222B3A] py-2 px-6 max-w-lg mx-auto">
-          <div className="flex justify-around items-center">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.to;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  className={`flex flex-col items-center space-y-1 relative py-1 px-3 rounded-xl transition-all ${
-                    isActive ? "text-amber-400 font-bold" : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <div className="relative">
-                    <Icon className={`w-5 h-5 ${isActive ? "text-amber-400" : "text-slate-400"}`} />
-                    {item.badge && (
-                      <span className="absolute -top-1.5 -right-2.5 bg-emerald-500 text-slate-950 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ring-2 ring-[#151A23]">
-                        {item.badge}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] tracking-tight">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
+        </SessionProvider>
 
         <Scripts />
       </body>
