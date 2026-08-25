@@ -1,440 +1,249 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { 
   ShieldCheck, 
-  ArrowLeft, 
-  Layers, 
-  Zap, 
-  BrainCircuit, 
-  CheckCircle2, 
-  AlertCircle, 
-  User,
+  TrendingUp, 
+  TrendingDown, 
+  AlertTriangle, 
+  ChevronLeft, 
+  Trash2,
   Activity
 } from "lucide-react";
 
 export const Route = createFileRoute("/position")({
-  head: () => ({
-    meta: [{ title: "Positions & Post-Mortem 🛡️ CapitalGuard" }],
-  }),
-  component: PositionsDashboard,
+  component: PositionsComponent,
 });
 
-export function PositionsDashboard() {
-  const navigate = useNavigate();
+interface Position {
+  id: string;
+  symbol: string;
+  baseSymbol?: string;
+  arena: "options" | "futures";
+  segment?: string;
+  orderSide: "BUY" | "SELL";
+  lots: number;
+  lotSize: number;
+  quantity: number;
+  entryPrice: number;
+  currentPrice: number;
+  stopLoss: number;
+  marginUsed?: number;
+  pnl: number;
+  status: "OPEN" | "CLOSED";
+  timestamp: string;
+}
 
-  const [openPositions, setOpenPositions] = useState<any[]>(() => {
+export function PositionsComponent() {
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [dailyLimit, setDailyLimit] = useState<number>(5000);
+  const [arena, setArena] = useState<string>("options");
+
+  // Load positions
+  useEffect(() => {
     try {
       const saved = localStorage.getItem("capitalguard_positions");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+      const limit = Number(localStorage.getItem("capitalguard_daily_limit")) || 5000;
+      const savedArena = localStorage.getItem("capitalguard_arena") || "options";
+      setDailyLimit(limit);
+      setArena(savedArena);
 
-  const [closedPositions, setClosedPositions] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem("capitalguard_closed_positions");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Normalize position data to prevent NaN
+          const normalized = parsed.map((p) => ({
+            ...p,
+            lots: Number(p.lots) || 1,
+            lotSize: Number(p.lotSize) || 50,
+            quantity: Number(p.quantity) || (Number(p.lots) || 1) * (Number(p.lotSize) || 50),
+            entryPrice: Number(p.entryPrice) || 100,
+            currentPrice: Number(p.currentPrice) || Number(p.entryPrice) || 100,
+            stopLoss: Number(p.stopLoss) || 0,
+            pnl: Number(p.pnl) || 0,
+            status: p.status || "OPEN",
+          }));
+          setPositions(normalized);
+        }
+      }
+    } catch (e) {}
+  }, []);
 
-  const [selectedPostMortem, setSelectedPostMortem] = useState<any | null>(null);
-
-  // Live Price Ticking Engine
+  // ⚡ 1.5-Second Live Price Momentum Engine
   useEffect(() => {
-    if (openPositions.length === 0) return;
-
     const interval = setInterval(() => {
-      setOpenPositions((prev) =>
-        prev.map((pos) => {
-          const delta = (Math.random() - 0.48) * (pos.currentPrice * 0.008);
-          const nextPrice = Math.max(0.5, Number((pos.currentPrice + delta).toFixed(2)));
-          return { ...pos, currentPrice: nextPrice };
-        })
-      );
-    }, 1200);
+      setPositions((prev) => {
+        let hasChanged = false;
+        const updated = prev.map((pos) => {
+          if (pos.status === "CLOSED") return pos;
+
+          // Jitter -0.15% to +0.15%
+          const jitterPercent = (Math.random() * 0.3 - 0.15) / 100;
+          const newPrice = Number(Math.max(0.05, pos.currentPrice * (1 + jitterPercent)).toFixed(2));
+          
+          const qty = Number(pos.quantity) || (pos.lots * pos.lotSize) || 1;
+          const pnl = Number(
+            (pos.orderSide === "BUY" ? newPrice - pos.entryPrice : pos.entryPrice - newPrice) * qty
+          );
+
+          // Auto Stop-Loss Hit Trigger
+          const slTriggered = pos.orderSide === "BUY" ? newPrice <= pos.stopLoss : newPrice >= pos.stopLoss;
+
+          hasChanged = true;
+          return {
+            ...pos,
+            currentPrice: newPrice,
+            pnl: Number(pnl.toFixed(2)),
+            status: slTriggered ? "CLOSED" : pos.status,
+          };
+        });
+
+        if (hasChanged) {
+          try {
+            localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
+    }, 1500);
 
     return () => clearInterval(interval);
-  }, [openPositions.length]);
+  }, []);
 
-  const handleSquareOffSingle = (id: string) => {
-    const target = openPositions.find((p) => p.id === id);
-    if (!target) return;
+  const openPositions = positions.filter((p) => p.status === "OPEN");
+  const closedPositions = positions.filter((p) => p.status === "CLOSED");
 
-    const realizedPnL =
-      target.type === "BUY"
-        ? (target.currentPrice - target.entryPrice) * target.quantity
-        : (target.entryPrice - target.currentPrice) * target.quantity;
+  const totalUnrealized = openPositions.reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
+  const totalRealized = closedPositions.reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
+  const netPnL = totalUnrealized + totalRealized;
 
-    const closedItem = {
-      ...target,
-      exitPrice: target.currentPrice,
-      realizedPnL,
-      exitTimestamp: new Date().toLocaleTimeString(),
-      postMortem: {
-        disciplineScore: realizedPnL >= 0 ? 95 : 80,
-        slAdherence: "Hard Stop Respected",
-        emotionTag: realizedPnL >= 0 ? "Disciplined Execution" : "Controlled Loss",
-      },
-    };
-
-    const nextOpen = openPositions.filter((p) => p.id !== id);
-    const nextClosed = [closedItem, ...closedPositions];
-
-    setOpenPositions(nextOpen);
-    setClosedPositions(nextClosed);
-
-    localStorage.setItem("capitalguard_positions", JSON.stringify(nextOpen));
-    localStorage.setItem("capitalguard_closed_positions", JSON.stringify(nextClosed));
+  const handleSquareOff = (id: string) => {
+    const updated = positions.map((p) => (p.id === id ? { ...p, status: "CLOSED" as const } : p));
+    setPositions(updated);
+    localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
   };
 
   const handleSquareOffAll = () => {
-    if (openPositions.length === 0) return;
-
-    const newlyClosed = openPositions.map((pos) => {
-      const realizedPnL =
-        pos.type === "BUY"
-          ? (pos.currentPrice - pos.entryPrice) * pos.quantity
-          : (pos.entryPrice - pos.currentPrice) * pos.quantity;
-      return {
-        ...pos,
-        exitPrice: pos.currentPrice,
-        realizedPnL,
-        exitTimestamp: new Date().toLocaleTimeString(),
-        postMortem: {
-          disciplineScore: 85,
-          slAdherence: "Manual Square Off",
-          emotionTag: "Bulk Exit",
-        },
-      };
-    });
-
-    const nextClosed = [...newlyClosed, ...closedPositions];
-    setOpenPositions([]);
-    setClosedPositions(nextClosed);
-
-    localStorage.setItem("capitalguard_positions", JSON.stringify([]));
-    localStorage.setItem("capitalguard_closed_positions", JSON.stringify(nextClosed));
+    const updated = positions.map((p) => ({ ...p, status: "CLOSED" as const }));
+    setPositions(updated);
+    localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
   };
 
-  const openOptions = openPositions.filter((p) => p.arena !== "futures");
-  const closedOptions = closedPositions.filter((p) => p.arena !== "futures");
-
-  const openFutures = openPositions.filter((p) => p.arena === "futures");
-  const closedFutures = closedPositions.filter((p) => p.arena === "futures");
-
-  const calculateOpenPnL = (list: any[]) =>
-    list.reduce((acc, p) => {
-      const pnl = p.type === "BUY" ? (p.currentPrice - p.entryPrice) * p.quantity : (p.entryPrice - p.currentPrice) * p.quantity;
-      return acc + pnl;
-    }, 0);
-
-  const calculateClosedPnL = (list: any[]) =>
-    list.reduce((acc, p) => acc + (p.realizedPnL || 0), 0);
-
-  const optionsUnrealized = calculateOpenPnL(openOptions);
-  const optionsRealized = calculateClosedPnL(closedOptions);
-  const optionsTotalPnL = optionsUnrealized + optionsRealized;
-
-  const futuresUnrealized = calculateOpenPnL(openFutures);
-  const futuresRealized = calculateClosedPnL(closedFutures);
-  const futuresTotalPnL = futuresUnrealized + futuresRealized;
-
-  const totalDayPnL = optionsTotalPnL + futuresTotalPnL;
-  const totalRealizedDay = optionsRealized + futuresRealized;
-  const totalUnrealizedDay = optionsUnrealized + futuresUnrealized;
-
-  const hasAnyTrade = openPositions.length > 0 || closedPositions.length > 0;
-
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 sm:p-6 pb-28">
-      <div className="max-w-4xl mx-auto space-y-5">
-        {/* Top Navigation Bar */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#222B3A]">
-          <Link to="/terminal" className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span>Return to Terminal</span>
-          </Link>
-          <div className="flex items-center space-x-2">
-            <Link
-              to="/profile"
-              className="flex items-center space-x-1 px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 hover:text-white"
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
+      
+      {/* Top Header */}
+      <div className="flex items-center justify-between">
+        <Link
+          to="/terminal"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#151A23] border border-[#222B3A] text-xs font-bold text-slate-300 hover:text-white"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>Return to Terminal</span>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
+            <Activity className="w-3.5 h-3.5 animate-pulse" />
+            <span>TICK ENGINE LIVE</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero PnL Banner */}
+      <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-6 text-center shadow-xl space-y-2">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">TODAY&apos;S NET PROFIT &amp; LOSS</span>
+        <div className={`text-3xl sm:text-4xl font-mono font-black ${netPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+          {netPnL >= 0 ? `+₹${netPnL.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `-₹${Math.abs(netPnL).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        </div>
+        <div className="flex justify-center gap-6 text-xs font-mono text-slate-400 pt-1">
+          <span>Realized: <b className={totalRealized >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalRealized.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></span>
+          <span>•</span>
+          <span>Unrealized: <b className={totalUnrealized >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalUnrealized.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></span>
+        </div>
+      </div>
+
+      {/* Open Positions List */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">
+            Open Positions ({openPositions.length})
+          </h2>
+          {openPositions.length > 0 && (
+            <button
+              onClick={handleSquareOffAll}
+              className="text-xs font-bold text-rose-400 hover:text-rose-300 underline underline-offset-4"
             >
-              <User className="w-3.5 h-3.5" />
-              <span>Profile & Journal</span>
-            </Link>
-          </div>
+              Square Off All
+            </button>
+          )}
         </div>
 
-        {/* TODAY'S NET PROFIT / LOSS BANNER (TOP PROMINENT) */}
-        <div className="p-6 bg-gradient-to-r from-[#151A23] via-[#1A202C] to-[#151A23] border border-[#222B3A] rounded-2xl text-center shadow-xl">
-          <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Today's Net Profit & Loss</span>
-          <div className={`text-4xl font-extrabold font-mono mt-2 transition-colors ${totalDayPnL >= 0 ? "text-emerald-400" : "text-rose-500"}`}>
-            {totalDayPnL >= 0 ? "+" : ""}₹{totalDayPnL.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="flex items-center justify-center space-x-4 mt-3 text-xs text-slate-400 font-mono">
-            <span>Realized: <strong className={totalRealizedDay >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalRealizedDay.toFixed(2)}</strong></span>
-            <span>•</span>
-            <span>Unrealized: <strong className={totalUnrealizedDay >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalUnrealizedDay.toFixed(2)}</strong></span>
-          </div>
-        </div>
-
-        {!hasAnyTrade ? (
-          <div className="text-center py-16 bg-[#151A23] border border-[#222B3A] rounded-2xl">
-            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
-              <Layers className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-white text-sm mb-1">No Trades Placed Today</h3>
-            <p className="text-slate-400 text-xs mb-4">Execute Option or Future contracts in the terminal to view positions and Day P&L.</p>
-            <Link to="/terminal" className="px-4 py-2 bg-amber-400 text-slate-950 font-bold text-xs rounded-xl hover:brightness-110">
-              Open Terminal →
-            </Link>
+        {openPositions.length === 0 ? (
+          <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-8 text-center text-slate-500 text-xs">
+            No active open trades. Place orders from the Terminal.
           </div>
         ) : (
-          <>
-            {/* SECTION 1: OPTIONS POSITIONS */}
-            <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-[#222B3A] pb-3">
-                <div className="flex items-center space-x-2">
-                  <span className="p-1.5 bg-amber-400/10 text-amber-400 rounded-lg">
-                    <Layers className="w-4 h-4" />
+          openPositions.map((pos) => (
+            <div
+              key={pos.id}
+              className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg hover:border-slate-700 transition"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-white text-sm">{pos.symbol}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                    pos.orderSide === "BUY" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+                  }`}>
+                    {pos.orderSide} {pos.lots}L ({pos.quantity} Qty)
                   </span>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Options Positions</h3>
-                    <p className="text-[10px] text-slate-400">{openOptions.length} Active • {closedOptions.length} Closed</p>
-                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Options Net</span>
-                  <span className={`text-base font-bold font-mono ${optionsTotalPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {optionsTotalPnL >= 0 ? "+" : ""}₹{optionsTotalPnL.toFixed(2)}
-                  </span>
+                <div className="text-xs font-mono text-slate-400 mt-1 space-x-3">
+                  <span>Entry: <b className="text-slate-200">₹{pos.entryPrice}</b></span>
+                  <span>LTP: <b className="text-amber-400">₹{pos.currentPrice}</b></span>
+                  <span>SL: <b className="text-rose-400">₹{pos.stopLoss}</b></span>
                 </div>
               </div>
 
-              {/* Open Options */}
-              {openOptions.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Option Contracts</span>
-                  {openOptions.map((pos) => {
-                    const pnl = pos.type === "BUY" ? (pos.currentPrice - pos.entryPrice) * pos.quantity : (pos.entryPrice - pos.currentPrice) * pos.quantity;
-                    return (
-                      <div key={pos.id} className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-white">{pos.symbol}</span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${pos.type === "BUY" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"}`}>
-                              {pos.type}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {pos.quantity} Qty • Entry: ₹{pos.entryPrice.toFixed(1)} • LTP: ₹{pos.currentPrice.toFixed(1)} • Hard SL: ₹{pos.stopLoss}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <span className={`text-sm font-bold font-mono ${pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {pnl >= 0 ? "+" : ""}₹{pnl.toFixed(2)}
-                          </span>
-                          <button
-                            onClick={() => handleSquareOffSingle(pos.id)}
-                            className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg text-[10px] font-bold transition-all"
-                          >
-                            Exit Trade
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Closed Options */}
-              {closedOptions.length > 0 && (
-                <div className="space-y-1.5 pt-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Closed Option Trades</span>
-                  {closedOptions.map((pos, idx) => (
-                    <div key={idx} className="p-2.5 bg-slate-900/40 border border-slate-800/60 rounded-lg flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-semibold text-slate-300">{pos.symbol}</span>
-                        <span className="text-[10px] text-slate-500 ml-2 font-mono">Exit @ ₹{pos.exitPrice?.toFixed(1)}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`font-mono font-bold ${pos.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                          {pos.realizedPnL >= 0 ? "+" : ""}₹{pos.realizedPnL.toFixed(2)}
-                        </span>
-                        <button
-                          onClick={() => setSelectedPostMortem(pos)}
-                          className="px-2 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px] font-bold hover:bg-amber-400/20"
-                        >
-                          Post-Mortem
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* SECTION 2: FUTURES POSITIONS */}
-            <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-[#222B3A] pb-3">
-                <div className="flex items-center space-x-2">
-                  <span className="p-1.5 bg-cyan-400/10 text-cyan-400 rounded-lg">
-                    <Zap className="w-4 h-4" />
-                  </span>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Futures Positions</h3>
-                    <p className="text-[10px] text-slate-400">{openFutures.length} Active • {closedFutures.length} Closed</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block uppercase">Futures Net</span>
-                  <span className={`text-base font-bold font-mono ${futuresTotalPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {futuresTotalPnL >= 0 ? "+" : ""}₹{futuresTotalPnL.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Open Futures */}
-              {openFutures.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Futures Contracts</span>
-                  {openFutures.map((pos) => {
-                    const pnl = pos.type === "BUY" ? (pos.currentPrice - pos.entryPrice) * pos.quantity : (pos.entryPrice - pos.currentPrice) * pos.quantity;
-                    return (
-                      <div key={pos.id} className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-white">{pos.symbol}</span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${pos.type === "BUY" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"}`}>
-                              {pos.type}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {pos.quantity} Qty • Entry: ₹{pos.entryPrice.toFixed(1)} • LTP: ₹{pos.currentPrice.toFixed(1)} • Hard SL: ₹{pos.stopLoss}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <span className={`text-sm font-bold font-mono ${pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            {pnl >= 0 ? "+" : ""}₹{pnl.toFixed(2)}
-                          </span>
-                          <button
-                            onClick={() => handleSquareOffSingle(pos.id)}
-                            className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg text-[10px] font-bold transition-all"
-                          >
-                            Exit Trade
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Closed Futures */}
-              {closedFutures.length > 0 && (
-                <div className="space-y-1.5 pt-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Closed Futures Trades</span>
-                  {closedFutures.map((pos, idx) => (
-                    <div key={idx} className="p-2.5 bg-slate-900/40 border border-slate-800/60 rounded-lg flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-semibold text-slate-300">{pos.symbol}</span>
-                        <span className="text-[10px] text-slate-500 ml-2 font-mono">Exit @ ₹{pos.exitPrice?.toFixed(1)}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`font-mono font-bold ${pos.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                          {pos.realizedPnL >= 0 ? "+" : ""}₹{pos.realizedPnL.toFixed(2)}
-                        </span>
-                        <button
-                          onClick={() => setSelectedPostMortem(pos)}
-                          className="px-2 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px] font-bold hover:bg-amber-400/20"
-                        >
-                          Post-Mortem
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Square Off Master Button */}
-            {openPositions.length > 0 && (
-              <button
-                onClick={handleSquareOffAll}
-                className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-500/20 transition-all active:scale-[0.98]"
-              >
-                SQUARE OFF ALL OPEN POSITIONS ({openPositions.length})
-              </button>
-            )}
-          </>
-        )}
-
-        {/* POST-MORTEM ANALYSIS MODAL / DRAWER */}
-        {selectedPostMortem && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center space-x-2">
-                  <BrainCircuit className="w-5 h-5 text-amber-400" />
-                  <h3 className="font-bold text-sm text-white">Post-Mortem Trade Analysis</h3>
+              <div className="flex items-center justify-between sm:justify-end gap-4">
+                <div className={`text-base font-mono font-black ${pos.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  {pos.pnl >= 0 ? `+₹${pos.pnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : `-₹${Math.abs(pos.pnl).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
                 </div>
                 <button
-                  onClick={() => setSelectedPostMortem(null)}
-                  className="text-slate-400 hover:text-white text-xs font-bold"
+                  onClick={() => handleSquareOff(pos.id)}
+                  className="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs shadow-md transition"
                 >
-                  ✕
+                  Exit Trade
                 </button>
               </div>
-
-              <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-1">
-                <div className="text-xs font-bold text-white">{selectedPostMortem.symbol}</div>
-                <div className="text-[10px] text-slate-400 font-mono">
-                  Entry: ₹{selectedPostMortem.entryPrice} • Exit: ₹{selectedPostMortem.exitPrice} • Net P&L:{" "}
-                  <span className={selectedPostMortem.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                    ₹{selectedPostMortem.realizedPnL?.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Discipline Score</span>
-                  <span className="font-bold text-emerald-400">{selectedPostMortem.postMortem?.disciplineScore || 90} / 100</span>
-                </div>
-
-                <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Stop-Loss Adherence</span>
-                  <span className="font-bold text-slate-200">{selectedPostMortem.postMortem?.slAdherence || "Respected"}</span>
-                </div>
-
-                <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400">Psychology Tag</span>
-                  <span className="font-bold text-amber-400">{selectedPostMortem.postMortem?.emotionTag || "Rule Follower"}</span>
-                </div>
-
-                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Key AI Behavioral Takeaway</span>
-                  <p className="text-[11px] text-slate-300">
-                    {selectedPostMortem.realizedPnL >= 0
-                      ? "Trade was executed with predefined risk-to-reward parameters. Good job letting the strategy play out without impulsive tweaks."
-                      : "Loss was kept strictly within the guardrail limit. Capital protection was successfully preserved."}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedPostMortem(null)}
-                className="w-full py-2.5 bg-amber-400 text-slate-950 font-bold text-xs rounded-xl hover:brightness-110"
-              >
-                Close Analysis
-              </button>
             </div>
-          </div>
+          ))
         )}
       </div>
+
+      {/* Closed Positions History */}
+      {closedPositions.length > 0 && (
+        <div className="space-y-3 pt-3">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">
+            Closed Positions ({closedPositions.length})
+          </h2>
+          {closedPositions.map((pos) => (
+            <div
+              key={pos.id}
+              className="bg-[#151A23]/60 border border-[#222B3A] rounded-2xl p-3.5 flex items-center justify-between opacity-80"
+            >
+              <div>
+                <span className="font-bold text-white text-xs">{pos.symbol}</span>
+                <span className="text-[10px] text-slate-500 font-mono block">
+                  Closed • Entry: ₹{pos.entryPrice} • Exit: ₹{pos.currentPrice}
+                </span>
+              </div>
+              <div className={`text-xs font-mono font-bold ${pos.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {pos.pnl >= 0 ? `+₹${pos.pnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : `-₹${Math.abs(pos.pnl).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
