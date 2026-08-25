@@ -2,14 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { 
   ShieldCheck, 
-  AlertTriangle, 
-  Sliders, 
+  Lock, 
   TrendingUp, 
   TrendingDown, 
-  Lock, 
-  CheckCircle2, 
-  Info,
-  ChevronDown
+  Activity, 
+  AlertOctagon, 
+  ChevronDown 
 } from "lucide-react";
 import { FNO_STOCKS } from "@/lib/fnoCatalog";
 
@@ -17,15 +15,20 @@ export const Route = createFileRoute("/terminal")({
   component: TerminalComponent,
 });
 
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
 export function TerminalComponent() {
   const navigate = useNavigate();
+  const todayKey = getTodayKey();
 
-  // Guardrail state
   const [arena, setArena] = useState<"options" | "futures">("options");
   const [dailyLimit, setDailyLimit] = useState<number>(5000);
   const [cumulativeLoss, setCumulativeLoss] = useState<number>(0);
+  const [totalPnl, setTotalPnl] = useState<number>(0);
 
-  // Trading form state
   const [symbol, setSymbol] = useState(FNO_STOCKS[0]?.symbol || "NIFTY");
   const [segment, setSegment] = useState<"CE" | "PE" | "FUT">("CE");
   const [strike, setStrike] = useState<number>(24500);
@@ -33,36 +36,40 @@ export function TerminalComponent() {
   const [lots, setLots] = useState<number>(1);
   const [entryPrice, setEntryPrice] = useState<number>(120);
   const [stopLoss, setStopLoss] = useState<string>("");
-  const [target, setTarget] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load active Guardrail Shield configuration
   useEffect(() => {
     try {
+      const lockDate = localStorage.getItem("capitalguard_lock_date");
       const savedArena = (localStorage.getItem("capitalguard_arena") as "options" | "futures") || "options";
-      const savedLimit = Number(localStorage.getItem("capitalguard_daily_limit")) || (savedArena === "futures" ? 250000 : 5000);
-      setArena(savedArena);
-      setDailyLimit(savedLimit);
+      const savedLimit = Number(localStorage.getItem("capitalguard_daily_limit"));
 
-      // Default segment to FUT if in futures arena
-      if (savedArena === "futures") {
-        setSegment("FUT");
+      if (lockDate !== todayKey || !savedLimit) {
+        navigate({ to: "/arena" });
+        return;
       }
 
-      // Calculate cumulative loss from closed positions today
+      setArena(savedArena);
+      setDailyLimit(savedLimit);
+      if (savedArena === "futures") setSegment("FUT");
+
       const savedPositions = JSON.parse(localStorage.getItem("capitalguard_positions") || "[]");
-      const dayLoss = savedPositions.reduce((acc: number, pos: any) => {
-        const pnl = Number(pos.pnl || 0);
-        return pnl < 0 ? acc + Math.abs(pnl) : acc;
-      }, 0);
+      let dayLoss = 0;
+      let netPnl = 0;
+      savedPositions.forEach((pos: any) => {
+        const p = Number(pos.pnl || 0);
+        netPnl += p;
+        if (p < 0) dayLoss += Math.abs(p);
+      });
       setCumulativeLoss(dayLoss);
+      setTotalPnl(netPnl);
     } catch (e) {}
-  }, []);
+  }, [navigate, todayKey]);
 
   const selectedStock = FNO_STOCKS.find((s) => s.symbol === symbol) || FNO_STOCKS[0];
   const lotSize = selectedStock?.lotSize || 50;
   const totalQty = lots * lotSize;
-  const maxRiskRupees = stopLoss ? Math.abs(entryPrice - Number(stopLoss)) * totalQty : 0;
+  const maxTradeRisk = stopLoss ? Math.abs(entryPrice - Number(stopLoss)) * totalQty : 0;
   const isBreached = cumulativeLoss >= dailyLimit;
   const lossPercentage = Math.min(100, Math.round((cumulativeLoss / dailyLimit) * 100));
 
@@ -70,26 +77,25 @@ export function TerminalComponent() {
     e.preventDefault();
 
     if (isBreached) {
-      setToastMessage("⛔ TERMINAL LOCKED: Daily Guardrail Loss Floor Breached.");
+      setToastMessage("⛔ TERMINAL LOCKED: Daily Loss Floor breached. No new trades allowed.");
       return;
     }
 
     if (!stopLoss || Number(stopLoss) <= 0) {
-      setToastMessage("⚠️ MANDATORY STOP-LOSS REQUIRED: CapitalGuard refuses orders without a hard Stop-Loss.");
+      setToastMessage("⚠️ MANDATORY STOP-LOSS: CapitalGuard refuses orders without a hard Stop-Loss.");
       return;
     }
 
     const slNum = Number(stopLoss);
     if (orderSide === "BUY" && slNum >= entryPrice) {
-      setToastMessage("⚠️ Invalid SL: Long Stop-Loss must be lower than entry price.");
+      setToastMessage("⚠️ Long Stop-Loss must be lower than Entry Price.");
       return;
     }
     if (orderSide === "SELL" && slNum <= entryPrice) {
-      setToastMessage("⚠️ Invalid SL: Short Stop-Loss must be higher than entry price.");
+      setToastMessage("⚠️ Short Stop-Loss must be higher than Entry Price.");
       return;
     }
 
-    // Save Position to LocalStorage
     const newPosition = {
       id: "pos_" + Date.now(),
       symbol: `${symbol} ${segment === "FUT" ? "FUT" : `${strike} ${segment}`}`,
@@ -101,7 +107,6 @@ export function TerminalComponent() {
       entryPrice,
       currentPrice: entryPrice,
       stopLoss: slNum,
-      target: target ? Number(target) : null,
       pnl: 0,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
@@ -109,76 +114,82 @@ export function TerminalComponent() {
     try {
       const existing = JSON.parse(localStorage.getItem("capitalguard_positions") || "[]");
       localStorage.setItem("capitalguard_positions", JSON.stringify([newPosition, ...existing]));
-      setToastMessage("✅ Position Protected & Placed! Guardrail Armed.");
-      setTimeout(() => {
-        navigate({ to: "/position" });
-      }, 900);
+      setToastMessage("✅ Position Protected & Placed!");
+      setTimeout(() => navigate({ to: "/position" }), 800);
     } catch (e) {
-      setToastMessage("Failed to record position.");
+      setToastMessage("Failed to place position.");
     }
   };
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 pb-28 max-w-xl mx-auto space-y-4">
       
-      {/* 🛡️ PERMANENT GUARDRAIL SHIELD HUD BANNER */}
-      <div className="bg-[#151A23] border border-amber-500/40 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
-              <ShieldCheck className="w-5 h-5" />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider text-amber-400">
-                  {arena === "futures" ? "Futures Shield (₹50L Capital)" : "Options Shield"}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30">
-                  ACTIVE
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-mono">
-                Loss Floor: <span className="text-white font-bold">₹{dailyLimit.toLocaleString("en-IN")}</span>
-              </p>
-            </div>
+      {/* Top Header */}
+      <div className="flex items-center justify-between pt-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+            <ShieldCheck className="w-5 h-5" />
           </div>
-
-          <button
-            onClick={() => navigate({ to: "/arena" })}
-            className="flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-xl transition"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Adjust</span>
-          </button>
+          <span className="font-black tracking-tight text-base text-white">CAPITALGUARD</span>
         </div>
-
-        {/* Real-time Loss Meter */}
-        <div className="mt-3 pt-3 border-t border-[#222B3A] space-y-1.5">
-          <div className="flex justify-between text-[11px] font-mono">
-            <span className="text-slate-400">Intraday Risk Consumption:</span>
-            <span className={isBreached ? "text-rose-400 font-bold" : "text-slate-300"}>
-              ₹{cumulativeLoss.toLocaleString("en-IN")} / ₹{dailyLimit.toLocaleString("en-IN")} ({lossPercentage}%)
-            </span>
-          </div>
-          <div className="w-full h-2 bg-[#0B0E14] rounded-full overflow-hidden border border-[#222B3A]">
-            <div
-              className={`h-full transition-all duration-500 ${
-                lossPercentage >= 90 ? "bg-rose-500" : lossPercentage >= 60 ? "bg-amber-400" : "bg-emerald-400"
-              }`}
-              style={{ width: `${lossPercentage}%` }}
-            />
-          </div>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#151A23] border border-[#222B3A] text-[11px] font-mono">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-slate-300 font-bold">NSE LIVE</span>
         </div>
-
-        {isBreached && (
-          <div className="mt-3 bg-rose-500/20 border border-rose-500/40 rounded-xl p-2.5 flex items-center gap-2 text-rose-300 text-xs font-bold">
-            <Lock className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>Daily Floor Breached. Terminal locked to protect your capital.</span>
-          </div>
-        )}
       </div>
 
-      {/* Toast Alert */}
+      {/* Account Balance Card */}
+      <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 shadow-xl space-y-2">
+        <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+          {arena === "futures" ? "Futures Portfolio Capital Base" : "Options Trading Account"}
+        </div>
+        <div className="flex items-baseline justify-between">
+          <div className="text-2xl font-black font-mono text-white">
+            ₹{arena === "futures" ? (5000000 + totalPnl).toLocaleString("en-IN") : (100000 + totalPnl).toLocaleString("en-IN")}
+          </div>
+          <div className={`text-xs font-mono font-bold ${totalPnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {totalPnl >= 0 ? `+₹${totalPnl.toLocaleString("en-IN")}` : `-₹${Math.abs(totalPnl).toLocaleString("en-IN")}`}
+          </div>
+        </div>
+      </div>
+
+      {/* 3 Risk KPI Badges */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-[#151A23] border border-[#222B3A] rounded-xl p-3 space-y-1">
+          <span className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1">
+            <Lock className="w-3 h-3 text-amber-400" /> Floor
+          </span>
+          <div className="text-xs font-mono font-bold text-amber-400">
+            ₹{dailyLimit.toLocaleString("en-IN")}
+          </div>
+        </div>
+
+        <div className="bg-[#151A23] border border-[#222B3A] rounded-xl p-3 space-y-1">
+          <span className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1">
+            <Activity className="w-3 h-3 text-emerald-400" /> Risk Used
+          </span>
+          <div className={`text-xs font-mono font-bold ${lossPercentage >= 80 ? "text-rose-400" : "text-slate-200"}`}>
+            {lossPercentage}%
+          </div>
+        </div>
+
+        <div className="bg-[#151A23] border border-[#222B3A] rounded-xl p-3 space-y-1">
+          <span className="text-[10px] text-slate-400 uppercase font-semibold flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-amber-400" /> Shield
+          </span>
+          <div className="text-xs font-mono font-bold text-emerald-400">
+            {isBreached ? "LOCKED" : "ARMED"}
+          </div>
+        </div>
+      </div>
+
+      {isBreached && (
+        <div className="bg-rose-500/20 border border-rose-500/50 p-3.5 rounded-xl flex items-center gap-3 text-rose-200 text-xs font-bold shadow-lg">
+          <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0" />
+          <span>Daily Loss Floor Reached. Terminal is locked until 12:00 AM midnight.</span>
+        </div>
+      )}
+
       {toastMessage && (
         <div className="bg-amber-500/20 border border-amber-500/50 text-amber-200 text-xs font-bold p-3 rounded-xl flex items-center justify-between shadow-lg">
           <span>{toastMessage}</span>
@@ -186,14 +197,12 @@ export function TerminalComponent() {
         </div>
       )}
 
-      {/* 🚀 ORDER EXECUTION FORM */}
-      <form onSubmit={handlePlaceOrder} className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 space-y-4 shadow-xl">
-        
-        {/* Symbol & Segment Selector */}
+      {/* Order Entry Form */}
+      <form onSubmit={handlePlaceOrder} className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 space-y-3.5 shadow-xl">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-              Instrument
+              Symbol
             </label>
             <div className="relative">
               <select
@@ -236,7 +245,6 @@ export function TerminalComponent() {
           </div>
         </div>
 
-        {/* Strike Selection (If not FUT) */}
         {segment !== "FUT" && (
           <div>
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
@@ -251,7 +259,6 @@ export function TerminalComponent() {
           </div>
         )}
 
-        {/* Buy / Sell Buttons & Lots */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
@@ -295,7 +302,6 @@ export function TerminalComponent() {
           </div>
         </div>
 
-        {/* Entry Price & Mandatory Stop Loss */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
@@ -313,10 +319,9 @@ export function TerminalComponent() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                <Lock className="w-3 h-3" />
-                Stop-Loss (₹) *
+                <Lock className="w-3 h-3" /> Stop-Loss *
               </label>
-              <span className="text-[9px] text-amber-400/80 font-semibold uppercase">Mandatory</span>
+              <span className="text-[9px] text-amber-400/80 font-bold uppercase">Mandatory</span>
             </div>
             <input
               type="number"
@@ -330,15 +335,13 @@ export function TerminalComponent() {
           </div>
         </div>
 
-        {/* Max Calculated Risk Notice */}
         {stopLoss && Number(stopLoss) > 0 && (
           <div className="bg-[#0B0E14] border border-[#222B3A] rounded-xl p-3 flex items-center justify-between text-xs font-mono">
-            <span className="text-slate-400">Trade Risk Ceiling:</span>
-            <span className="text-rose-400 font-bold">₹{maxRiskRupees.toLocaleString("en-IN")}</span>
+            <span className="text-slate-400">Calculated Risk Ceiling:</span>
+            <span className="text-rose-400 font-bold">₹{maxTradeRisk.toLocaleString("en-IN")}</span>
           </div>
         )}
 
-        {/* Submit Button */}
         <button
           type="submit"
           disabled={isBreached}
@@ -351,7 +354,7 @@ export function TerminalComponent() {
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          <span>{isBreached ? "Terminal Locked (Risk Floor Breached)" : `Execute Guarded ${orderSide}`}</span>
+          <span>{isBreached ? "Terminal Locked" : `Execute Guarded ${orderSide}`}</span>
         </button>
       </form>
     </div>
