@@ -1,296 +1,140 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { 
   User, 
-  Mail, 
-  Phone, 
-  Wallet, 
-  Ghost, 
-  HelpCircle, 
-  LogOut, 
-  Loader2, 
   ShieldCheck, 
-  ArrowLeft,
-  FileText,
-  Zap,
-  Info,
-  Eye,
-  EyeOff
+  Lock, 
+  RotateCcw, 
+  Award, 
+  TrendingUp, 
+  Play, 
+  LogOut,
+  ChevronRight
 } from "lucide-react";
+import { useSession } from "@/hooks/useSession";
 
 export const Route = createFileRoute("/profile")({
-  head: () => ({
-    meta: [{ title: "User Profile & Journal 🛡️ CapitalGuard" }],
-  }),
-  component: ProfilePage,
+  component: ProfileComponent,
 });
 
-export function ProfilePage() {
+export function ProfileComponent() {
   const navigate = useNavigate();
+  const { user, logout } = useSession();
 
-  const [profile] = useState({
-    name: "Govind Thakur",
-    email: "govind.thakur@capitalguard.internal",
-    phone: "+91 98765 43210",
-  });
+  const [arena, setArena] = useState("options");
+  const [dailyLimit, setDailyLimit] = useState(5000);
+  const [disciplineScore, setDisciplineScore] = useState(98);
+  const [streakDays, setStreakDays] = useState(14);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "journal" | "academics">("overview");
-  const [isGhostDebtVisible, setIsGhostDebtVisible] = useState<boolean>(false);
-
-  // Load trades from storage
-  const [openPositions] = useState<any[]>(() => {
+  useEffect(() => {
     try {
-      const saved = localStorage.getItem("capitalguard_positions");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+      const savedArena = localStorage.getItem("capitalguard_arena") || "options";
+      const savedLimit = Number(localStorage.getItem("capitalguard_daily_limit")) || (savedArena === "futures" ? 250000 : 5000);
+      setArena(savedArena);
+      setDailyLimit(savedLimit);
+    } catch (e) {}
+  }, []);
 
-  const [journalTrades] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem("capitalguard_closed_positions");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const handleReplayIntro = () => {
+    sessionStorage.removeItem("capitalguard_splash_seen");
+    window.location.reload();
+  };
 
-  // Calculate live deployed capital
-  const optionsDeployed = openPositions
-    .filter((p) => p.arena !== "futures")
-    .reduce((acc, p) => acc + (p.capitalRequired || 0), 0);
-
-  const futuresDeployed = openPositions
-    .filter((p) => p.arena === "futures")
-    .reduce((acc, p) => acc + (p.capitalRequired || 0), 0);
-
-  const optionsRemaining = Math.max(0, 1000000 - optionsDeployed);
-  const futuresRemaining = Math.max(0, 5000000 - futuresDeployed);
-
-  // Dynamic Ghost Debt: Base 60 Lakh (10L + 50L) - Net Realized P&L
-  const totalRealizedPnL = journalTrades.reduce((acc, trade) => acc + (trade.realizedPnL || 0), 0);
-  const basePool = 6000000;
-  const currentGhostDebt = basePool - totalRealizedPnL;
-
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate({ to: "/" });
+  const handleEmergencyResetDay = () => {
+    localStorage.removeItem("capitalguard_lock_date");
+    localStorage.removeItem("capitalguard_positions");
+    localStorage.removeItem("capitalguard_arena");
+    localStorage.removeItem("capitalguard_daily_limit");
+    setMessage("Guardrail reset complete. Redirecting to Arena Gate...");
+    setTimeout(() => navigate({ to: "/arena" }), 800);
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 sm:p-6 pb-28">
-      <div className="max-w-3xl mx-auto space-y-5">
-        {/* Navigation Bar */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#222B3A]">
-          <Link to="/terminal" className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span>Return to Terminal</span>
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Logout</span>
-          </button>
+    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header Profile Card */}
+      <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-black text-xl">
+            {user?.name?.[0]?.toUpperCase() || "T"}
+          </div>
+          <div>
+            <h1 className="text-lg font-black text-white">{user?.name || "Pro Trader"}</h1>
+            <p className="text-xs text-slate-400 font-mono">{user?.email || "trader@capitalguard.io"}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                PRO VERIFIED
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 capitalize">
+                {arena} Arena
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* User Info Card */}
-        <div className="p-5 bg-[#151A23] border border-[#222B3A] rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400 font-bold text-lg">
-              {profile.name.charAt(0)}
-            </div>
+        <button
+          onClick={handleReplayIntro}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0B0E14] border border-[#222B3A] text-xs font-bold text-slate-300 hover:text-white transition shadow-md"
+        >
+          <Play className="w-4 h-4 text-amber-400" />
+          <span>Replay 12s Intro Video</span>
+        </button>
+      </div>
+
+      {message && (
+        <div className="bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-bold p-3 rounded-xl text-center">
+          {message}
+        </div>
+      )}
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 text-center space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discipline Score</span>
+          <div className="text-2xl font-mono font-black text-emerald-400">{disciplineScore}%</div>
+          <p className="text-[10px] text-slate-500">Zero unmanaged drawdown</p>
+        </div>
+
+        <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 text-center space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Shielded Streak</span>
+          <div className="text-2xl font-mono font-black text-amber-400">{streakDays} Days</div>
+          <p className="text-[10px] text-slate-500">Strict SL adherence</p>
+        </div>
+
+        <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 text-center space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Locked Daily Loss</span>
+          <div className="text-2xl font-mono font-black text-rose-400">₹{dailyLimit.toLocaleString("en-IN")}</div>
+          <p className="text-[10px] text-slate-500">Locked till 12:00 AM</p>
+        </div>
+      </div>
+
+      {/* Account Control Actions */}
+      <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-5 space-y-3">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Risk System Controls</h2>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => navigate({ to: "/arena" })}
+            className="w-full p-3.5 rounded-xl bg-[#0B0E14] border border-[#222B3A] flex items-center justify-between hover:border-slate-700 transition text-left"
+          >
             <div>
-              <h2 className="text-base font-bold text-white">{profile.name}</h2>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-0.5">
-                <span className="flex items-center space-x-1"><Mail className="w-3 h-3 text-slate-500" /> <span>{profile.email}</span></span>
-                <span className="flex items-center space-x-1"><Phone className="w-3 h-3 text-slate-500" /> <span>{profile.phone}</span></span>
-              </div>
+              <span className="text-xs font-bold text-white block">Switch Trading Arena &amp; Floor</span>
+              <span className="text-[10px] text-slate-500">Change between Options Arena and Futures Arena</span>
             </div>
-          </div>
-        </div>
-
-        {/* Capital Pools */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
-                <Wallet className="w-4 h-4 text-amber-400" />
-                <span>Options Arena Capital</span>
-              </span>
-              <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded font-medium">₹10L Max</span>
-            </div>
-            <p className="text-sm font-normal text-slate-200">
-              ₹{optionsRemaining.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ₹10,00,000.00
-            </p>
-            <span className="text-[10px] text-slate-500 block">
-              Deployed in options: ₹{optionsDeployed.toLocaleString("en-IN")}
-            </span>
-          </div>
-
-          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
-                <Zap className="w-4 h-4 text-cyan-400" />
-                <span>Futures Arena Margin</span>
-              </span>
-              <span className="text-[10px] text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded font-medium">₹50L Max</span>
-            </div>
-            <p className="text-sm font-normal text-slate-200">
-              ₹{futuresRemaining.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ₹50,00,000.00
-            </p>
-            <span className="text-[10px] text-slate-500 block">
-              Deployed in SPAN margins: ₹{futuresDeployed.toLocaleString("en-IN")}
-            </span>
-          </div>
-        </div>
-
-        {/* Ghost Debt (Toggle Mask) & Shield Floor */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
-                <Ghost className="w-4 h-4 text-purple-400" />
-                <span>Ghost Debt Balance</span>
-              </span>
-              <button
-                onClick={() => setIsGhostDebtVisible(!isGhostDebtVisible)}
-                className="text-slate-400 hover:text-white p-1 rounded transition-colors"
-                title={isGhostDebtVisible ? "Hide Debt" : "Show Debt"}
-              >
-                {isGhostDebtVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-            <p className="text-sm font-normal text-slate-300 pt-0.5 tracking-wide">
-              {isGhostDebtVisible
-                ? `₹${currentGhostDebt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : "₹ ••••••••.••"}
-            </p>
-            <span className="text-[10px] text-slate-500 block">
-              Base: ₹60L (Profits deduct debt, Losses add to debt)
-            </span>
-          </div>
-
-          <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 flex items-center space-x-1.5 font-medium">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Shield Guardrail Floor</span>
-              </span>
-              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium">Active</span>
-            </div>
-            <p className="text-sm font-normal text-slate-300 pt-0.5">
-              ₹5,000.00 Max Daily Loss Cutoff
-            </p>
-            <span className="text-[10px] text-slate-500 block">Auto-liquidates if breached</span>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex space-x-2 p-1 bg-[#151A23] border border-[#222B3A] rounded-xl text-xs font-bold">
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={`flex-1 py-2 rounded-lg transition-all ${activeTab === "overview" ? "bg-amber-400 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
-          >
-            About Shield
+            <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>
+
           <button
-            onClick={() => setActiveTab("journal")}
-            className={`flex-1 py-2 rounded-lg transition-all ${activeTab === "journal" ? "bg-amber-400 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
+            onClick={handleEmergencyResetDay}
+            className="w-full p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between hover:bg-rose-500/20 transition text-left"
           >
-            Trading Journal ({journalTrades.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("academics")}
-            className={`flex-1 py-2 rounded-lg transition-all ${activeTab === "academics" ? "bg-amber-400 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
-          >
-            Academics
+            <div>
+              <span className="text-xs font-bold text-rose-300 block">Reset Guardrail &amp; Clear Storage</span>
+              <span className="text-[10px] text-rose-400/80">Clear positions and re-lock fresh daily guardrails</span>
+            </div>
+            <RotateCcw className="w-4 h-4 text-rose-400" />
           </button>
         </div>
-
-        {/* TAB 1: ABOUT CAPITALGUARD */}
-        {activeTab === "overview" && (
-          <div className="space-y-4">
-            <div className="p-5 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-3 text-xs leading-relaxed text-slate-300">
-              <div className="flex items-center space-x-2 text-sm font-bold text-white">
-                <Info className="w-4 h-4 text-amber-400" />
-                <span>About CapitalGuard & Its Importance</span>
-              </div>
-              <p>
-                In retail derivatives (F&O) trading, over 93% of capital loss occurs due to emotional revenge trading, failing to cut losers, and over-leveraging beyond risk tolerance.
-              </p>
-              <p>
-                <strong>CapitalGuard</strong> operates as an unbreachable psychological firewall. By mandating hard stop-losses, calculating SPAN margins in real-time, and enforcing strict daily guardrails, the platform prevents account blow-outs and builds systematic market discipline.
-              </p>
-            </div>
-
-            <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl flex items-center justify-between text-xs">
-              <div className="flex items-center space-x-2">
-                <HelpCircle className="w-4 h-4 text-amber-400" />
-                <span className="font-semibold text-slate-200">Need Guidance or Support?</span>
-              </div>
-              <a
-                href="mailto:support@capitalguard.internal"
-                className="px-3 py-1.5 bg-slate-900 border border-slate-700 hover:border-slate-500 rounded-lg text-[11px] font-bold text-slate-200"
-              >
-                Contact Support
-              </a>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: EMBEDDED JOURNAL */}
-        {activeTab === "journal" && (
-          <div className="p-5 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#222B3A] pb-3">
-              <div className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-amber-400" />
-                <h3 className="text-sm font-bold text-white">Trade History & Execution Journal</h3>
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono">{journalTrades.length} Recorded Trades</span>
-            </div>
-
-            {journalTrades.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-8">No closed trades recorded in the journal today.</p>
-            ) : (
-              <div className="space-y-2">
-                {journalTrades.map((trade, idx) => (
-                  <div key={idx} className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-white">{trade.symbol}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        {trade.quantity} Qty • Entry: ₹{trade.entryPrice} • Exit: ₹{trade.exitPrice} ({trade.exitTimestamp})
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className={`font-mono font-bold ${trade.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {trade.realizedPnL >= 0 ? "+" : ""}₹{trade.realizedPnL?.toFixed(2)}
-                      </span>
-                      <span className="block text-[9px] text-slate-500">Discipline Score: {trade.postMortem?.disciplineScore || 90}/100</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: ACADEMICS LOADING */}
-        {activeTab === "academics" && (
-          <div className="p-8 bg-[#151A23] border border-[#222B3A] rounded-2xl text-center space-y-4">
-            <div className="w-12 h-12 mx-auto rounded-full bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
-              <Loader2 className="w-6 h-6 animate-spin" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-white">Academics Curriculum Loading...</h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Syncing institutional risk modeling lessons, delta hedging modules, and option Greeks masterclasses.
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

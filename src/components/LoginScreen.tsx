@@ -1,106 +1,57 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { useSession } from "@/lib/session";
-
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 48 48" className="size-5" aria-hidden="true">
-      <path
-        fill="#FFC107"
-        d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"
-      />
-      <path
-        fill="#FF3D00"
-        d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
-      />
-      <path
-        fill="#4CAF50"
-        d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.1-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"
-      />
-      <path
-        fill="#1976D2"
-        d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C37 41.1 44 36 44 24c0-1.2-.1-2.3-.4-3.5z"
-      />
-    </svg>
-  );
-}
+import React, { useState } from "react";
+import { ShieldCheck, Lock, Mail, ArrowRight } from "lucide-react";
+import { useSession } from "@/hooks/useSession";
 
 export function LoginScreen() {
-  const { signIn } = useSession();
-  const navigate = useNavigate();
-  const enter = (u: Parameters<ReturnType<typeof useSession>["signIn"]>[0]) => {
-    signIn(u);
-    void navigate({ to: "/" });
+  const { login } = useSession();
+  const [email, setEmail] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    login(email || "trader@capitalguard.io");
   };
-  const [phone, setPhone] = useState("");
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
-      <div className="w-full max-w-sm text-center">
-        <img
-          src="/logo.png"
-          alt="CapitalGuard"
-          className="shield-pulse mx-auto w-56 max-w-full rounded-xl"
-        />
-        <h1 className="mt-6 bg-gradient-to-b from-white via-slate-200 to-slate-400 bg-clip-text text-3xl font-bold tracking-tight text-transparent">
-          Practice with Consequences • Secure Future
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Discipline-First Trading Simulator
-        </p>
-
-        <button
-          onClick={() =>
-            enter({
-              name: "Sai Deekshit",
-              email: "sai.deekshit@gmail.com",
-              avatar: "SD",
-              method: "google",
-            })
-          }
-          className="mt-10 flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card py-3.5 text-sm font-semibold transition-colors hover:bg-accent"
-        >
-          <GoogleIcon />
-          Continue with Google
-        </button>
-
-        <div className="my-6 flex items-center gap-3">
-          <span className="h-px flex-1 bg-border" />
-          <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">or</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center rounded-xl border border-border bg-card px-3">
-            <span className="num shrink-0 pr-2 text-sm text-muted-foreground">+91</span>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              inputMode="numeric"
-              aria-label="Mobile number"
-              placeholder="Enter mobile number"
-              className="num w-full min-w-0 bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground"
-            />
+    <div className="min-h-screen bg-[#0B0E14] flex flex-col justify-center items-center p-4">
+      <div className="w-full max-w-md bg-[#151A23] border border-[#222B3A] rounded-2xl p-6 md:p-8 shadow-2xl space-y-6">
+        <div className="flex flex-col items-center text-center space-y-2">
+          <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded-2xl text-amber-400">
+            <ShieldCheck className="w-8 h-8" />
           </div>
-          <button
-            onClick={() =>
-              enter({
-                name: phone ? `+91 ${phone}` : "Guest Trader",
-                email: phone ? `+91${phone}` : "guest@capitalguard.app",
-                avatar: "CG",
-                method: "phone",
-              })
-            }
-            className="shrink-0 rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Send OTP
-          </button>
+          <h1 className="text-xl font-black text-white uppercase tracking-wider">CapitalGuard</h1>
+          <p className="text-xs text-slate-400">Institutional F&amp;O Risk-Controlled Terminal</p>
         </div>
 
-        <p className="mt-10 text-xs leading-relaxed text-warning">
-          ⚠️ By continuing, you agree this is a virtual trading simulator — no real money is ever
-          placed.
-        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase">Trader Email</label>
+            <div className="relative">
+              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <input
+                type="email"
+                placeholder="trader@capitalguard.io"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-[#0B0E14] border border-[#222B3A] rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition"
+          >
+            <span>Access Guarded Terminal</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </form>
+
+        <div className="text-center pt-2">
+          <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+            <Lock className="w-3 h-3 text-amber-400" />
+            <span>Unbreachable 12:00 AM Risk Guardrails Active</span>
+          </div>
+        </div>
       </div>
     </div>
   );
