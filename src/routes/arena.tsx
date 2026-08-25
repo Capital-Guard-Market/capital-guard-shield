@@ -1,132 +1,225 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Shield, Zap, TrendingUp, ArrowRight, Lock, CheckCircle2, RotateCcw } from "lucide-react";
-import { useSession } from "@/lib/session";
+import { ShieldCheck, TrendingUp, Zap, Sliders, CheckCircle2, ChevronRight, X, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/arena")({
-  head: () => ({
-    meta: [{ title: "Choose Arena 🛡️ CapitalGuard" }],
-  }),
-  component: ArenaSelect,
+  component: ArenaComponent,
 });
 
-export function ArenaSelect() {
+const FUTURES_CAPITAL = 5000000; // ₹50,00,000 Base Capital
+
+const OPTIONS_TIERS = [
+  { label: "₹5,000", sublabel: "Conservative", value: 5000 },
+  { label: "₹10,000", sublabel: "Moderate", value: 10000 },
+  { label: "₹20,000", sublabel: "Aggressive", value: 20000 },
+];
+
+const FUTURES_TIERS = [
+  { label: "5%", sublabel: "₹2,50,000 Risk", value: 250000 },
+  { label: "10%", sublabel: "₹5,00,000 Risk", value: 500000 },
+  { label: "20%", sublabel: "₹10,00,000 Risk", value: 1000000 },
+];
+
+function ArenaComponent() {
   const navigate = useNavigate();
-  const session = useSession();
+  const [selectedArena, setSelectedArena] = useState<"options" | "futures">("options");
+  const [dailyLimit, setDailyLimit] = useState<number>(5000);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [hasExistingGuardrail, setHasExistingGuardrail] = useState(false);
-  const [lossLimit, setLossLimit] = useState<number>(5000);
-  const [isEditingLimit, setIsEditingLimit] = useState(false);
-
+  // Load saved preferences
   useEffect(() => {
-    const savedLimit = localStorage.getItem("capitalguard_guardrail_limit");
-    if (savedLimit) {
-      setLossLimit(Number(savedLimit));
-      setHasExistingGuardrail(true);
-    }
+    try {
+      const savedArena = localStorage.getItem("capitalguard_arena");
+      if (savedArena === "options" || savedArena === "futures") {
+        setSelectedArena(savedArena);
+      }
+      const savedLimit = localStorage.getItem("capitalguard_daily_limit");
+      if (savedLimit) {
+        setDailyLimit(Number(savedLimit));
+      } else {
+        setDailyLimit(savedArena === "futures" ? 250000 : 5000);
+      }
+    } catch (e) {}
   }, []);
 
-  const handleSelectArena = (arenaType: "options" | "futures") => {
-    localStorage.setItem("capitalguard_arena", arenaType);
-    localStorage.setItem("capitalguard_guardrail_limit", lossLimit.toString());
-    navigate({ to: "/terminal" });
+  // Handle Arena Switch
+  const handleArenaChange = (arena: "options" | "futures") => {
+    setSelectedArena(arena);
+    const defaultLimit = arena === "options" ? 5000 : 250000;
+    setDailyLimit(defaultLimit);
+    localStorage.setItem("capitalguard_arena", arena);
+    localStorage.setItem("capitalguard_daily_limit", defaultLimit.toString());
   };
 
+  // Handle Tier Select
+  const handleSelectLimit = (val: number) => {
+    setDailyLimit(val);
+    localStorage.setItem("capitalguard_daily_limit", val.toString());
+    setIsModalOpen(false);
+  };
+
+  const activeTiers = selectedArena === "options" ? OPTIONS_TIERS : FUTURES_TIERS;
+
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 sm:p-6 flex flex-col justify-center items-center">
-      <div className="max-w-xl w-full space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 bg-amber-400/10 border border-amber-400/30 rounded-full text-amber-400 text-xs font-bold">
-            <Shield className="w-3.5 h-3.5" />
-            <span>CAPITALGUARD RISK ENGINE</span>
-          </div>
-          <h1 className="text-2xl font-extrabold text-white">Select Your Trading Arena</h1>
-          <p className="text-xs text-slate-400">Switch arenas seamlessly under your active risk shield.</p>
+    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 pb-28 max-w-xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="text-center pt-4 space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          CapitalGuard Risk Engine
         </div>
+        <h1 className="text-2xl font-black tracking-tight text-white">Select Your Trading Arena</h1>
+        <p className="text-xs text-slate-400">Switch arenas seamlessly under your active risk shield.</p>
+      </div>
 
-        {/* Active Shield Guardrail Card */}
-        <div className="p-4 bg-[#151A23] border border-[#222B3A] rounded-2xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-slate-200">Daily Guardrail Shield</span>
-            </div>
-            <button
-              onClick={() => setIsEditingLimit(!isEditingLimit)}
-              className="text-[11px] text-amber-400 hover:underline font-semibold"
-            >
-              {isEditingLimit ? "Lock Limit" : "Adjust Limit"}
-            </button>
+      {/* Active Daily Loss Floor Card */}
+      <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 shadow-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Daily Guardrail Shield</span>
           </div>
-
-          {isEditingLimit ? (
-            <div className="pt-2">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Set Daily Max Loss Buffer (₹)</label>
-              <input
-                type="number"
-                value={lossLimit}
-                onChange={(e) => setLossLimit(Math.max(500, Number(e.target.value)))}
-                className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm font-mono font-bold text-white focus:outline-none focus:border-amber-400"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center justify-between text-xs text-slate-400 font-mono bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-              <span>Active Daily Loss Floor:</span>
-              <span className="text-amber-400 font-bold text-sm">₹{lossLimit.toLocaleString("en-IN")}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Arena Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Options Arena */}
           <button
-            onClick={() => handleSelectArena("options")}
-            className="p-5 bg-[#151A23] border border-[#222B3A] hover:border-amber-400 rounded-2xl text-left space-y-3 transition-all hover:scale-[1.02] active:scale-[0.98] group"
+            onClick={() => setIsModalOpen(true)}
+            className="text-xs font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-4 flex items-center gap-1 transition"
           >
-            <div className="p-2.5 bg-amber-400/10 text-amber-400 rounded-xl w-fit group-hover:bg-amber-400 group-hover:text-slate-950 transition-colors">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Options Arena</h3>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Index & Stock Options trading with upfront premium allocation and gamma volatility protection.
-              </p>
-            </div>
-            <div className="pt-2 flex items-center justify-between text-xs font-bold text-amber-400">
-              <span>Virtual Capital: ₹10 Lakh</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </button>
-
-          {/* Futures Arena */}
-          <button
-            onClick={() => handleSelectArena("futures")}
-            className="p-5 bg-[#151A23] border border-[#222B3A] hover:border-cyan-400 rounded-2xl text-left space-y-3 transition-all hover:scale-[1.02] active:scale-[0.98] group"
-          >
-            <div className="p-2.5 bg-cyan-400/10 text-cyan-400 rounded-xl w-fit group-hover:bg-cyan-400 group-hover:text-slate-950 transition-colors">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Futures Arena</h3>
-              <p className="text-[11px] text-slate-400 mt-1">
-                High-leverage multi-lot futures with SPAN margin tracking and linear tick precision.
-              </p>
-            </div>
-            <div className="pt-2 flex items-center justify-between text-xs font-bold text-cyan-400">
-              <span>Virtual Capital: ₹50 Lakh</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </div>
+            <Sliders className="w-3 h-3" />
+            Adjust Limit
           </button>
         </div>
 
-        <div className="text-center pt-2">
-          <Link to="/profile" className="text-xs text-slate-400 hover:text-white underline">
-            Go to Profile & Personal Journal →
-          </Link>
+        <div className="bg-[#0B0E14]/80 border border-[#222B3A] rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span className="text-xs text-slate-400 block">Active Daily Loss Floor:</span>
+            {selectedArena === "futures" && (
+              <span className="text-[10px] text-slate-500 font-mono">
+                Base Capital: ₹{FUTURES_CAPITAL.toLocaleString("en-IN")}
+              </span>
+            )}
+          </div>
+          <span className="text-lg font-mono font-black text-amber-400">
+            ₹{dailyLimit.toLocaleString("en-IN")}
+          </span>
         </div>
       </div>
+
+      {/* Arena Selection Cards */}
+      <div className="space-y-3">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">Choose Arena</h2>
+
+        {/* Options Arena Card */}
+        <div
+          onClick={() => handleArenaChange("options")}
+          className={`cursor-pointer rounded-2xl p-4 border transition-all relative overflow-hidden ${
+            selectedArena === "options"
+              ? "bg-amber-500/10 border-amber-500/60 shadow-[0_0_20px_rgba(251,191,36,0.15)]"
+              : "bg-[#151A23] border-[#222B3A] hover:border-slate-700 opacity-70"
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">F&O Options Arena</h3>
+                <p className="text-xs text-slate-400">Index & Stock Options trading with fixed ₹ loss limits.</p>
+              </div>
+            </div>
+            {selectedArena === "options" && <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-[#222B3A]/60 flex items-center justify-between text-xs font-mono text-slate-300">
+            <span>Floor Tiers:</span>
+            <span className="text-amber-400 font-semibold">₹5,000 | ₹10,000 | ₹20,000</span>
+          </div>
+        </div>
+
+        {/* Futures Arena Card */}
+        <div
+          onClick={() => handleArenaChange("futures")}
+          className={`cursor-pointer rounded-2xl p-4 border transition-all relative overflow-hidden ${
+            selectedArena === "futures"
+              ? "bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+              : "bg-[#151A23] border-[#222B3A] hover:border-slate-700 opacity-70"
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">Futures Arena</h3>
+                <p className="text-xs text-slate-400">Stock & Index Futures bound to ₹50L portfolio capital.</p>
+              </div>
+            </div>
+            {selectedArena === "futures" && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-[#222B3A]/60 flex items-center justify-between text-xs font-mono text-slate-300">
+            <span>Portfolio Risk Tiers:</span>
+            <span className="text-emerald-400 font-semibold">5% (₹2.5L) | 10% (₹5L) | 20% (₹10L)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Enter Terminal Action Button */}
+      <button
+        onClick={() => navigate({ to: "/terminal" })}
+        className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg transition"
+      >
+        <span>Enter {selectedArena === "options" ? "Options" : "Futures"} Terminal</span>
+        <ChevronRight className="w-4 h-4 stroke-[3]" />
+      </button>
+
+      {/* Adjust Limit Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white font-bold">
+                <Sliders className="w-4 h-4 text-amber-400" />
+                <span>Select Daily Loss Limit</span>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              {selectedArena === "options"
+                ? "Select an absolute intraday loss ceiling for Options:"
+                : "Select risk percentage on ₹50,00,000 Futures capital base:"}
+            </p>
+
+            <div className="space-y-2">
+              {activeTiers.map((tier) => (
+                <button
+                  key={tier.value}
+                  onClick={() => handleSelectLimit(tier.value)}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    dailyLimit === tier.value
+                      ? "bg-amber-400/10 border-amber-400 text-amber-400 font-bold"
+                      : "bg-[#0B0E14] border-[#222B3A] text-slate-300 hover:border-slate-600"
+                  }`}
+                >
+                  <span className="font-mono text-base">{tier.label}</span>
+                  <span className="text-xs text-slate-400 font-sans">{tier.sublabel}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>Breaching this floor activates mandatory terminal lockout.</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
