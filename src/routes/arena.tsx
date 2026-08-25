@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { ShieldCheck, TrendingUp, Zap, Lock, AlertTriangle, ChevronRight } from "lucide-react";
+import { ShieldCheck, TrendingUp, Zap, Lock, AlertTriangle, ChevronRight, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/arena")({
   component: ArenaComponent,
 });
+
+const FUTURES_CAPITAL = 5000000; // ₹50,00,000 Base
 
 const OPTIONS_TIERS = [
   { label: "₹5,000", title: "Conservative", value: 5000 },
@@ -13,9 +15,9 @@ const OPTIONS_TIERS = [
 ];
 
 const FUTURES_TIERS = [
-  { label: "5%", title: "₹2,50,000 Risk", value: 250000 },
-  { label: "10%", title: "₹5,00,000 Risk", value: 500000 },
-  { label: "20%", title: "₹10,00,000 Risk", value: 1000000 },
+  { label: "5%", title: "₹2,50,000 Risk Floor", value: 250000 },
+  { label: "10%", title: "₹5,00,000 Risk Floor", value: 500000 },
+  { label: "20%", title: "₹10,00,000 Risk Floor", value: 1000000 },
 ];
 
 function getTodayKey() {
@@ -64,7 +66,7 @@ function ArenaComponent() {
   const activeTiers = arena === "options" ? OPTIONS_TIERS : FUTURES_TIERS;
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 pb-28 max-w-xl mx-auto space-y-5">
+    <div className="min-h-screen bg-[#0B0E14] text-slate-100 p-4 pb-28 max-w-xl mx-auto space-y-5 font-sans">
       
       {/* Header */}
       <div className="text-center pt-3 space-y-1.5">
@@ -72,11 +74,11 @@ function ArenaComponent() {
           <ShieldCheck className="w-3.5 h-3.5" />
           Pre-Market Risk Commitment
         </div>
-        <h1 className="text-2xl font-black text-white">Daily Guardrail Gate</h1>
+        <h1 className="text-2xl font-black text-white">Select Your Trading Arena</h1>
         <p className="text-xs text-slate-400">
           {isLockedToday
-            ? "Your daily guardrail is locked for active market hours."
-            : "Select your trading arena & daily loss floor. Once locked, it cannot be adjusted until 12:00 AM."}
+            ? "Your daily guardrail is active and locked for today."
+            : "Switch arenas and select your daily loss floor. Once locked, it cannot be adjusted until 12:00 AM."}
         </p>
       </div>
 
@@ -108,7 +110,7 @@ function ArenaComponent() {
             onClick={() => navigate({ to: "/terminal" })}
             className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg transition"
           >
-            <span>Enter Trading Terminal</span>
+            <span>Enter {lockedArena === "futures" ? "Futures" : "Options"} Terminal</span>
             <ChevronRight className="w-4 h-4 stroke-[3]" />
           </button>
         </div>
@@ -146,7 +148,7 @@ function ArenaComponent() {
 
           <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 space-y-3">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-              Choose Today&apos;s Loss Floor ({arena === "options" ? "Options ₹" : "Futures on ₹50L"}):
+              Choose Today&apos;s Loss Floor ({arena === "options" ? "Options ₹" : "Futures on ₹50L Base"}):
             </label>
 
             <div className="space-y-2">
