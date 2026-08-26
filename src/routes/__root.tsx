@@ -71,8 +71,30 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="en" className="dark">
       <head>
         <HeadContent />
+        {/* Tailwind CSS Engine */}
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              tailwind.config = {
+                darkMode: 'class',
+                theme: {
+                  extend: {
+                    colors: {
+                      brand: {
+                        50: '#fffbeb',
+                        500: '#f59e0b',
+                        600: '#d97706',
+                      }
+                    }
+                  }
+                }
+              }
+            `,
+          }}
+        />
       </head>
-      <body className="bg-[#090d14] text-slate-100 min-h-screen">
+      <body className="bg-[#090d14] text-slate-100 min-h-screen font-sans antialiased">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -166,7 +188,7 @@ function RootLayout() {
       </aside>
 
       {/* MAIN VIEWPORT */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <Outlet />
       </main>
     </div>
