@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { useLiveMarket } from "@/hooks/useLiveMarket";
 import { 
   ShieldCheck, 
   Lock, 
@@ -187,6 +188,19 @@ export function TerminalComponent() {
         </div>
 
         <div className="flex items-center gap-3">
+          <span
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-black uppercase tracking-wide ${
+              live.isLive
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-slate-500/10 border-slate-600/40 text-slate-400"
+            }`}
+            title={live.message ?? live.status}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${live.isLive ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`}
+            />
+            {live.isLive ? "Angel One LIVE" : "Simulated Feed"}
+          </span>
           <Link
             to="/equity"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0B0E14] border border-[#222B3A] text-slate-300 hover:text-white text-xs font-bold transition"
