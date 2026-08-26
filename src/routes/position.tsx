@@ -57,7 +57,7 @@ export function PositionsComponent() {
             currentPrice: Number(p.currentPrice) || Number(p.entryPrice) || 100,
             stopLoss: Number(p.stopLoss) || 0,
             pnl: Number(p.pnl) || 0,
-            status: p.status || "OPEN",
+            status: (p.status === "CLOSED" ? "CLOSED" : "OPEN") as "OPEN" | "CLOSED",
           }));
           setPositions(normalized);
         }
@@ -88,7 +88,7 @@ export function PositionsComponent() {
             ...pos,
             currentPrice: newPrice,
             pnl: Number(pnl.toFixed(2)),
-            status: slTriggered ? "CLOSED" : pos.status,
+            status: (slTriggered ? "CLOSED" : pos.status) as "OPEN" | "CLOSED",
           };
         });
 

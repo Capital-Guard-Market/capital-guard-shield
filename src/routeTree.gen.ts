@@ -20,6 +20,7 @@ import { Route as RiskGateRouteImport } from './routes/risk-gate'
 import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as TerminalRouteImport } from './routes/terminal'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
+import { Route as ApiPublicMarketFeedRouteImport } from './routes/api/public/market-feed'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -76,6 +77,11 @@ const WatchlistRoute = WatchlistRouteImport.update({
   path: '/watchlist',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMarketFeedRoute = ApiPublicMarketFeedRouteImport.update({
+  id: '/api/public/market-feed',
+  path: '/api/public/market-feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/shield': typeof ShieldRoute
   '/terminal': typeof TerminalRoute
   '/watchlist': typeof WatchlistRoute
+  '/api/public/market-feed': typeof ApiPublicMarketFeedRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/shield': typeof ShieldRoute
   '/terminal': typeof TerminalRoute
   '/watchlist': typeof WatchlistRoute
+  '/api/public/market-feed': typeof ApiPublicMarketFeedRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/shield': typeof ShieldRoute
   '/terminal': typeof TerminalRoute
   '/watchlist': typeof WatchlistRoute
+  '/api/public/market-feed': typeof ApiPublicMarketFeedRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/shield'
     | '/terminal'
     | '/watchlist'
+    | '/api/public/market-feed'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/shield'
     | '/terminal'
     | '/watchlist'
+    | '/api/public/market-feed'
   id:
     | '__root__'
     | '/'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/shield'
     | '/terminal'
     | '/watchlist'
+    | '/api/public/market-feed'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,6 +183,7 @@ export interface RootRouteChildren {
   ShieldRoute: typeof ShieldRoute
   TerminalRoute: typeof TerminalRoute
   WatchlistRoute: typeof WatchlistRoute
+  ApiPublicMarketFeedRoute: typeof ApiPublicMarketFeedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WatchlistRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/market-feed': {
+      id: '/api/public/market-feed'
+      path: '/api/public/market-feed'
+      fullPath: '/api/public/market-feed'
+      preLoaderRoute: typeof ApiPublicMarketFeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -267,6 +287,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShieldRoute: ShieldRoute,
   TerminalRoute: TerminalRoute,
   WatchlistRoute: WatchlistRoute,
+  ApiPublicMarketFeedRoute: ApiPublicMarketFeedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

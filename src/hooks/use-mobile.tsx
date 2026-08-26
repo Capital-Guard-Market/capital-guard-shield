@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 export interface User {
   id: string;
@@ -34,7 +34,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [loading] = useState(false);
 
   const login = (email = "trader@capitalguard.io") => {
-    setUser({ id: "trader_1", email, name: email.split("@")[0] });
+    setUser({ id: "trader_1", email, name: email.split("@")[0] ?? email });
     setSession({ access_token: "mock_token" });
   };
 
@@ -57,4 +57,15 @@ export function useSession(): SessionContextType {
     return defaultSession;
   }
   return context;
+}
+export function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
 }
