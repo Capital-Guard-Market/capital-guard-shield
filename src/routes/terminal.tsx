@@ -19,7 +19,6 @@ import {
   AlertTriangle,
   CheckCircle,
   History,
-  Layers,
 } from "lucide-react";
 
 export const Route = createFileRoute("/terminal")({
@@ -34,14 +33,15 @@ interface InstrumentConfig {
   spanMargin: number;
   strikeStep: number;
   defaultPrice: number;
+  defaultSlPts: number;
 }
 
 const INSTRUMENTS: InstrumentConfig[] = [
-  { id: "NIFTY", symbol: "NIFTY", name: "NIFTY 50", lotSize: 65, spanMargin: 125000, strikeStep: 50, defaultPrice: 24282.40 },
-  { id: "BANKNIFTY", symbol: "BANKNIFTY", name: "BANK NIFTY", lotSize: 30, spanMargin: 145000, strikeStep: 100, defaultPrice: 57883.15 },
-  { id: "SENSEX", symbol: "SENSEX", name: "BSE SENSEX", lotSize: 20, spanMargin: 135000, strikeStep: 100, defaultPrice: 81350.25 },
-  { id: "FINNIFTY", symbol: "FINNIFTY", name: "FIN NIFTY", lotSize: 60, spanMargin: 110000, strikeStep: 50, defaultPrice: 23420.60 },
-  { id: "MIDCPNIFTY", symbol: "MIDCPNIFTY", name: "MIDCAP NIFTY", lotSize: 120, spanMargin: 95000, strikeStep: 25, defaultPrice: 13150.00 },
+  { id: "NIFTY", symbol: "NIFTY", name: "NIFTY 50", lotSize: 65, spanMargin: 125000, strikeStep: 50, defaultPrice: 24207.75, defaultSlPts: 60 },
+  { id: "BANKNIFTY", symbol: "BANKNIFTY", name: "BANK NIFTY", lotSize: 30, spanMargin: 145000, strikeStep: 50, defaultPrice: 57783.75, defaultSlPts: 150 },
+  { id: "SENSEX", symbol: "SENSEX", name: "BSE SENSEX", lotSize: 20, spanMargin: 135000, strikeStep: 100, defaultPrice: 81350.25, defaultSlPts: 250 },
+  { id: "FINNIFTY", symbol: "FINNIFTY", name: "FIN NIFTY", lotSize: 60, spanMargin: 110000, strikeStep: 50, defaultPrice: 23420.60, defaultSlPts: 60 },
+  { id: "MIDCPNIFTY", symbol: "MIDCPNIFTY", name: "MIDCAP NIFTY", lotSize: 120, spanMargin: 95000, strikeStep: 25, defaultPrice: 13150.00, defaultSlPts: 35 },
 ];
 
 export function TerminalComponent() {
@@ -53,7 +53,7 @@ export function TerminalComponent() {
   const [selectedInstId, setSelectedInstId] = useState<string>("NIFTY");
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [productType, setProductType] = useState<ProductType>("NRML"); // Default: Carry Forward
-  const [lotsInput, setLotsInput] = useState<string>("1"); // Clean string for easy typing
+  const [lotsInput, setLotsInput] = useState<string>("1");
   const [positionTab, setPositionTab] = useState<"OPEN" | "CLOSED">("OPEN");
 
   // Selected Option Strike details
@@ -83,7 +83,7 @@ export function TerminalComponent() {
 
   const spotPrice = bySymbol[activeInstrument.symbol]?.ltp ?? activeInstrument.defaultPrice;
 
-  // Compute ATM & 5 Strike Chain dynamically
+  // Compute 5-Strike Chain with 50-point differences
   const step = activeInstrument.strikeStep;
   const atmStrike = Math.round(spotPrice / step) * step;
 
@@ -98,16 +98,14 @@ export function TerminalComponent() {
 
     return strikes.map((strike) => {
       const dist = (strike - spotPrice) / step;
-      // Simulated premium pricing based on distance
-      const ceLtp = Math.max(12, Math.round(140 - dist * 35));
-      const peLtp = Math.max(12, Math.round(140 + dist * 35));
+      const ceLtp = Math.max(15, Math.round(140 - dist * 28));
+      const peLtp = Math.max(15, Math.round(140 + dist * 28));
       const tag = strike === atmStrike ? "ATM" : strike < atmStrike ? "ITM" : "OTM";
 
       return { strike, ceLtp, peLtp, tag };
     });
   }, [atmStrike, spotPrice, step]);
 
-  // Set default option selection on strike chain update
   useEffect(() => {
     if (!selectedStrike || Math.abs(selectedStrike - atmStrike) > step * 3) {
       setSelectedStrike(atmStrike);
@@ -115,40 +113,51 @@ export function TerminalComponent() {
     }
   }, [atmStrike, selectedStrike, step]);
 
-  // Pricing & Risk calculations
+  // Pricing & Sensible Stop Loss Calculation
   const parsedLots = Math.max(1, parseInt(lotsInput) || 1);
   const totalQty = parsedLots * activeInstrument.lotSize;
-
   const activeExecutionPrice = arenaMode === "FUTURES" ? spotPrice : selectedOptionPremium;
-  const [customSL, setCustomSL] = useState<number>(() => Math.round(activeExecutionPrice * 0.90));
+
+  const defaultCalculatedSL = useMemo(() => {
+    if (arenaMode === "FUTURES") {
+      const buffer = activeInstrument.defaultSlPts;
+      return orderSide === "BUY"
+        ? Math.round(spotPrice - buffer)
+        : Math.round(spotPrice + buffer);
+    }
+    // For Options: 30% risk buffer on premium
+    return orderSide === "BUY"
+      ? Math.max(1, Math.round(selectedOptionPremium * 0.70))
+      : Math.round(selectedOptionPremium * 1.30);
+  }, [arenaMode, spotPrice, selectedOptionPremium, orderSide, activeInstrument]);
+
+  const [customSL, setCustomSL] = useState<number>(defaultCalculatedSL);
 
   useEffect(() => {
-    setCustomSL(
-      Math.round(activeExecutionPrice * (orderSide === "BUY" ? 0.85 : 1.15))
-    );
-  }, [activeExecutionPrice, orderSide, arenaMode]);
+    setCustomSL(defaultCalculatedSL);
+  }, [defaultCalculatedSL, selectedInstId, arenaMode, selectedStrike]);
 
-  // Dynamic Capital Required
+  // Margin Calculation
   const capitalRequired = useMemo(() => {
     if (arenaMode === "FUTURES") {
       return parsedLots * activeInstrument.spanMargin;
     }
-    // Options Buying = Premium * Qty | Options Selling = Span Margin
     if (orderSide === "BUY") {
       return selectedOptionPremium * totalQty;
     }
     return parsedLots * activeInstrument.spanMargin;
   }, [arenaMode, orderSide, parsedLots, activeInstrument, selectedOptionPremium, totalQty]);
 
-  // Live PnL calculation for active positions
+  // Position Lists & Live PnL
   const arenaOpenPositions = (state.positions || []).filter((p) => p.segment === arenaMode);
   const arenaClosedPositions = (state.closedPositionsToday || []).filter((p) => p.segment === arenaMode);
 
   const unrealizedPnL = useMemo(() => {
     return arenaOpenPositions.reduce((acc, pos) => {
-      const currentPrice = arenaMode === "FUTURES" 
-        ? (bySymbol[pos.symbol]?.ltp ?? pos.currentPrice)
-        : pos.currentPrice;
+      const currentPrice =
+        arenaMode === "FUTURES"
+          ? bySymbol[pos.symbol]?.ltp ?? pos.currentPrice
+          : pos.currentPrice;
       const diff = pos.side === "BUY" ? currentPrice - pos.entryPrice : pos.entryPrice - currentPrice;
       return acc + diff * pos.qty;
     }, 0);
@@ -158,10 +167,10 @@ export function TerminalComponent() {
   const currentDrawdown = totalPnL < 0 ? Math.abs(totalPnL) : 0;
   const isFloorBreached = currentDrawdown >= activeLossFloor;
 
+  // Planned Risk Engine
   const plannedRisk = Math.abs(activeExecutionPrice - customSL) * totalQty;
-  const willBreach = (currentDrawdown + plannedRisk > activeLossFloor) || isFloorBreached;
+  const willBreach = currentDrawdown + plannedRisk > activeLossFloor || isFloorBreached;
 
-  // Handlers
   const handleSelectOptionStrike = (strike: number, type: "CE" | "PE", ltp: number) => {
     setSelectedStrike(strike);
     setSelectedOptionType(type);
@@ -171,9 +180,10 @@ export function TerminalComponent() {
   const handlePlaceOrder = () => {
     if (willBreach) return;
 
-    const symbolString = arenaMode === "FUTURES"
-      ? `${activeInstrument.symbol} FUT`
-      : `${activeInstrument.symbol} ${selectedStrike} ${selectedOptionType}`;
+    const symbolString =
+      arenaMode === "FUTURES"
+        ? `${activeInstrument.symbol} FUT`
+        : `${activeInstrument.symbol} ${selectedStrike} ${selectedOptionType}`;
 
     const newPos: OpenPosition = {
       id: "POS-" + Date.now(),
@@ -207,7 +217,8 @@ export function TerminalComponent() {
     const pos = (state.positions || []).find((p) => p.id === posId);
     if (!pos) return;
 
-    const currentPrice = arenaMode === "FUTURES" ? (bySymbol[pos.symbol]?.ltp ?? pos.currentPrice) : pos.currentPrice;
+    const currentPrice =
+      arenaMode === "FUTURES" ? bySymbol[pos.symbol]?.ltp ?? pos.currentPrice : pos.currentPrice;
     const diff = pos.side === "BUY" ? currentPrice - pos.entryPrice : pos.entryPrice - currentPrice;
     const realizedPnL = diff * pos.qty;
 
@@ -244,7 +255,8 @@ export function TerminalComponent() {
     const newClosedRecords: ClosedPosition[] = [];
 
     arenaOpenPositions.forEach((pos) => {
-      const currentPrice = arenaMode === "FUTURES" ? (bySymbol[pos.symbol]?.ltp ?? pos.currentPrice) : pos.currentPrice;
+      const currentPrice =
+        arenaMode === "FUTURES" ? bySymbol[pos.symbol]?.ltp ?? pos.currentPrice : pos.currentPrice;
       const diff = pos.side === "BUY" ? currentPrice - pos.entryPrice : pos.entryPrice - currentPrice;
       const pnl = diff * pos.qty;
       closedPnL += pnl;
@@ -289,7 +301,9 @@ export function TerminalComponent() {
           </div>
           <div className="text-xl md:text-2xl font-black text-white flex items-baseline gap-2">
             <span className={totalPnL >= 0 ? "text-emerald-400" : "text-rose-400"}>
-              {totalPnL >= 0 ? `+₹${totalPnL.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : `-₹${currentDrawdown.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`}
+              {totalPnL >= 0
+                ? `+₹${totalPnL.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+                : `-₹${currentDrawdown.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`}
             </span>
             <span className="text-slate-500 text-sm font-normal">
               / ₹{activeLossFloor.toLocaleString("en-IN")} Floor ({activeSelectedPct}%)
@@ -298,9 +312,13 @@ export function TerminalComponent() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border ${
-            isLive ? "bg-emerald-950/80 border-emerald-500 text-emerald-400" : "bg-slate-800 border-slate-700 text-slate-400"
-          }`}>
+          <div
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border ${
+              isLive
+                ? "bg-emerald-950/80 border-emerald-500 text-emerald-400"
+                : "bg-slate-800 border-slate-700 text-slate-400"
+            }`}
+          >
             <span className={`w-2 h-2 rounded-full ${isLive ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
             <span>ANGEL ONE LIVE</span>
           </div>
@@ -398,7 +416,9 @@ export function TerminalComponent() {
                   Spot: <span className="font-mono text-emerald-400">₹{spotPrice.toLocaleString("en-IN")}</span>
                 </p>
               </div>
-              <span className="text-xs font-bold text-amber-400 font-mono">Lot Size: {activeInstrument.lotSize} Qty</span>
+              <span className="text-xs font-bold text-amber-400 font-mono">
+                Lot Size: {activeInstrument.lotSize} Qty
+              </span>
             </div>
 
             {/* FUTURES DISPLAY */}
@@ -417,12 +437,12 @@ export function TerminalComponent() {
               </div>
             )}
 
-            {/* 5-STRIKE OPTION CHAIN DISPLAY */}
+            {/* 5-STRIKE OPTION CHAIN (50 PTS STEP) */}
             {arenaMode === "OPTIONS" && (
               <div className="my-4 space-y-2">
                 <div className="flex justify-between items-center px-1 text-xs text-slate-400 font-bold uppercase">
                   <span>Call (CE) Buy</span>
-                  <span>Strike & Type</span>
+                  <span>Strike & Type (50 Pts)</span>
                   <span>Put (PE) Buy</span>
                 </div>
 
@@ -457,9 +477,11 @@ export function TerminalComponent() {
                           <div className={`font-black ${isAtm ? "text-amber-400" : "text-white"}`}>
                             {row.strike}
                           </div>
-                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                            isAtm ? "bg-amber-400/20 text-amber-300" : "text-slate-500"
-                          }`}>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                              isAtm ? "bg-amber-400/20 text-amber-300" : "text-slate-500"
+                            }`}
+                          >
                             {row.tag}
                           </span>
                         </div>
@@ -494,14 +516,14 @@ export function TerminalComponent() {
           </div>
         </div>
 
-        {/* RIGHT: ORDER EXECUTION TICKET */}
+        {/* RIGHT: ORDER TICKET */}
         <div className="lg:col-span-5 bg-[#151a23] border border-[#22283a] rounded-2xl p-5 space-y-4">
           <div className="flex justify-between items-center border-b border-[#22283a] pb-3">
             <span className="text-xs font-black uppercase tracking-wider text-slate-300">Order Ticket</span>
             <span className="text-sm font-black font-mono text-amber-400">₹{activeExecutionPrice.toFixed(2)}</span>
           </div>
 
-          {/* PRODUCT TYPE: INTRADAY (MIS) vs CARRY FORWARD (NRML) */}
+          {/* PRODUCT CODE */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase">Product Code</label>
             <div className="grid grid-cols-2 gap-2">
@@ -548,7 +570,7 @@ export function TerminalComponent() {
             </button>
           </div>
 
-          {/* FLUID LOTS INPUT */}
+          {/* LOTS INPUT (Fluid Typing) */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-slate-400">
               <span>Lots (Type directly or use steppers)</span>
@@ -582,7 +604,7 @@ export function TerminalComponent() {
             </div>
           </div>
 
-          {/* Entry & Mandatory SL */}
+          {/* Entry & SL */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[11px] text-slate-400">Entry Price (₹)</label>
@@ -608,10 +630,10 @@ export function TerminalComponent() {
             </div>
           </div>
 
-          {/* ACCURATE MARGIN & PLANNED RISK */}
+          {/* Capital & Planned Risk Display */}
           <div className="space-y-2 pt-2 text-xs border-t border-[#22283a]">
             <div className="flex justify-between">
-              <span className="text-slate-400">Capital Req:</span>
+              <span className="text-slate-400">Capital Required:</span>
               <span className="text-white font-bold font-mono">₹{capitalRequired.toLocaleString("en-IN")}</span>
             </div>
             <div className="flex justify-between">
@@ -641,7 +663,7 @@ export function TerminalComponent() {
         </div>
       </div>
 
-      {/* POSITIONS BOOK (OPEN TRADES + CLOSED TRADES TODAY) */}
+      {/* POSITIONS BOOK */}
       <div className="bg-[#151a23] border border-[#22283a] rounded-2xl p-5 space-y-4 shadow-xl">
         <div className="flex flex-wrap justify-between items-center border-b border-[#22283a] pb-3 gap-3">
           <div className="flex items-center gap-2">
@@ -679,8 +701,8 @@ export function TerminalComponent() {
         </div>
 
         {/* OPEN POSITIONS TAB */}
-        {positionTab === "OPEN" && (
-          arenaOpenPositions.length === 0 ? (
+        {positionTab === "OPEN" &&
+          (arenaOpenPositions.length === 0 ? (
             <div className="py-8 text-center text-xs text-slate-500">
               No open positions in {arenaMode} Arena.
             </div>
@@ -701,8 +723,12 @@ export function TerminalComponent() {
                 </thead>
                 <tbody className="divide-y divide-[#1f2638]">
                   {arenaOpenPositions.map((pos) => {
-                    const currentPrice = arenaMode === "FUTURES" ? (bySymbol[pos.symbol]?.ltp ?? pos.currentPrice) : pos.currentPrice;
-                    const diff = pos.side === "BUY" ? currentPrice - pos.entryPrice : pos.entryPrice - currentPrice;
+                    const currentPrice =
+                      arenaMode === "FUTURES"
+                        ? bySymbol[pos.symbol]?.ltp ?? pos.currentPrice
+                        : pos.currentPrice;
+                    const diff =
+                      pos.side === "BUY" ? currentPrice - pos.entryPrice : pos.entryPrice - currentPrice;
                     const pnl = diff * pos.qty;
 
                     return (
@@ -714,13 +740,19 @@ export function TerminalComponent() {
                           </span>
                         </td>
                         <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                            pos.side === "BUY" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                              pos.side === "BUY"
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-rose-500/20 text-rose-400"
+                            }`}
+                          >
                             {pos.side}
                           </span>
                         </td>
-                        <td className="py-3">{pos.qty} ({pos.lots}L)</td>
+                        <td className="py-3">
+                          {pos.qty} ({pos.lots}L)
+                        </td>
                         <td className="py-3">₹{pos.entryPrice.toFixed(2)}</td>
                         <td className="py-3 text-emerald-400">₹{currentPrice.toFixed(2)}</td>
                         <td className={`py-3 font-black ${pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
@@ -740,12 +772,11 @@ export function TerminalComponent() {
                 </tbody>
               </table>
             </div>
-          )
-        )}
+          ))}
 
-        {/* CLOSED TRADES TODAY TAB (Retained until 12 AM) */}
-        {positionTab === "CLOSED" && (
-          arenaClosedPositions.length === 0 ? (
+        {/* CLOSED TRADES TODAY TAB */}
+        {positionTab === "CLOSED" &&
+          (arenaClosedPositions.length === 0 ? (
             <div className="py-8 text-center text-xs text-slate-500">
               No closed trades recorded today. All realized positions will remain here until 12:00 AM Midnight.
             </div>
@@ -777,8 +808,14 @@ export function TerminalComponent() {
                       <td className="py-3">{item.qty}</td>
                       <td className="py-3">₹{item.entryPrice.toFixed(2)}</td>
                       <td className="py-3">₹{item.exitPrice.toFixed(2)}</td>
-                      <td className={`py-3 font-black ${item.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {item.realizedPnL >= 0 ? `+₹${item.realizedPnL.toFixed(2)}` : `-₹${Math.abs(item.realizedPnL).toFixed(2)}`}
+                      <td
+                        className={`py-3 font-black ${
+                          item.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"
+                        }`}
+                      >
+                        {item.realizedPnL >= 0
+                          ? `+₹${item.realizedPnL.toFixed(2)}`
+                          : `-₹${Math.abs(item.realizedPnL).toFixed(2)}`}
                       </td>
                       <td className="py-3 text-right text-slate-400">{item.closedAt}</td>
                     </tr>
@@ -786,8 +823,7 @@ export function TerminalComponent() {
                 </tbody>
               </table>
             </div>
-          )
-        )}
+          ))}
       </div>
     </div>
   );
