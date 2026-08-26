@@ -1,4 +1,13 @@
-import { createRootRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import {
+  Outlet,
+  ScrollRestoration,
+  createRootRoute,
+  HeadContent,
+  Scripts,
+  Link,
+  useLocation,
+} from "@tanstack/react-router";
+import appCss from "../styles.css?url";
 import {
   ShieldAlert,
   Zap,
@@ -10,11 +19,28 @@ import {
   Lock,
 } from "lucide-react";
 
-// Load application CSS & Tailwind styles
-import "../index.css";
-
 export const Route = createRootRoute({
-  component: RootLayout,
+  head: () => ({
+    meta: [
+      {
+        charSet: "utf-8",
+      },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1",
+      },
+      {
+        title: "Capital Guard Shield",
+      },
+    ],
+    links: [
+      {
+        rel: "stylesheet",
+        href: appCss,
+      },
+    ],
+  }),
+  component: RootComponent,
   notFoundComponent: () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4 text-slate-300">
       <ShieldAlert className="w-12 h-12 text-amber-400" />
@@ -31,6 +57,29 @@ export const Route = createRootRoute({
     </div>
   ),
 });
+
+function RootComponent() {
+  return (
+    <RootDocument>
+      <RootLayout />
+    </RootDocument>
+  );
+}
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className="dark">
+      <head>
+        <HeadContent />
+      </head>
+      <body className="bg-[#090d14] text-slate-100 min-h-screen">
+        {children}
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
 
 function RootLayout() {
   const location = useLocation();
