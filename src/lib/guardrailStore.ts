@@ -31,10 +31,10 @@ export interface ClosedPosition {
 }
 
 export interface SegmentRisk {
-  capital: number;           // Dynamic rolling base capital
-  selectedTierPct: number;   // 5, 10, or 20
-  selectedFloor: number;     // Chosen daily loss floor in ₹
-  realizedPnL: number;       // Today's closed trades PnL
+  capital: number;
+  selectedTierPct: number;
+  selectedFloor: number;
+  realizedPnL: number;
 }
 
 export interface GuardrailState {
@@ -46,7 +46,7 @@ export interface GuardrailState {
   closedPositionsToday: ClosedPosition[];
 }
 
-const STORAGE_KEY = "capitalguard_store_v6";
+const STORAGE_KEY = "capitalguard_store_v7";
 
 export function getTodayISTDate(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -90,7 +90,6 @@ export function loadGuardrailState(): GuardrailState {
       const newFuturesCap = Math.max(100000, state.futures.capital + state.futures.realizedPnL);
       const newOptionsCap = Math.max(50000, state.options.capital + state.options.realizedPnL);
 
-      // Retain only Carry Forward (NRML) positions overnight
       const retainedPositions = (state.positions || []).filter(
         (p) => p.productType === "NRML"
       );

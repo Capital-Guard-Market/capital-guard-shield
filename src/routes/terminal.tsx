@@ -52,11 +52,10 @@ export function TerminalComponent() {
   const [arenaMode, setArenaMode] = useState<"FUTURES" | "OPTIONS">("FUTURES");
   const [selectedInstId, setSelectedInstId] = useState<string>("NIFTY");
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
-  const [productType, setProductType] = useState<ProductType>("NRML"); // Default: Carry Forward
+  const [productType, setProductType] = useState<ProductType>("NRML");
   const [lotsInput, setLotsInput] = useState<string>("1");
   const [positionTab, setPositionTab] = useState<"OPEN" | "CLOSED">("OPEN");
 
-  // Selected Option Strike details
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
   const [selectedOptionType, setSelectedOptionType] = useState<"CE" | "PE">("CE");
   const [selectedOptionPremium, setSelectedOptionPremium] = useState<number>(140);
@@ -73,7 +72,6 @@ export function TerminalComponent() {
   }, [navigate]);
 
   const activeShield = arenaMode === "FUTURES" ? state.futures : state.options;
-  const activeCapital = activeShield.capital;
   const activeLossFloor = activeShield.selectedFloor;
   const activeSelectedPct = activeShield.selectedTierPct;
 
@@ -83,7 +81,6 @@ export function TerminalComponent() {
 
   const spotPrice = bySymbol[activeInstrument.symbol]?.ltp ?? activeInstrument.defaultPrice;
 
-  // Compute 5-Strike Chain with 50-point differences
   const step = activeInstrument.strikeStep;
   const atmStrike = Math.round(spotPrice / step) * step;
 
@@ -113,7 +110,6 @@ export function TerminalComponent() {
     }
   }, [atmStrike, selectedStrike, step]);
 
-  // Pricing & Sensible Stop Loss Calculation
   const parsedLots = Math.max(1, parseInt(lotsInput) || 1);
   const totalQty = parsedLots * activeInstrument.lotSize;
   const activeExecutionPrice = arenaMode === "FUTURES" ? spotPrice : selectedOptionPremium;
@@ -125,7 +121,6 @@ export function TerminalComponent() {
         ? Math.round(spotPrice - buffer)
         : Math.round(spotPrice + buffer);
     }
-    // For Options: 30% risk buffer on premium
     return orderSide === "BUY"
       ? Math.max(1, Math.round(selectedOptionPremium * 0.70))
       : Math.round(selectedOptionPremium * 1.30);
@@ -137,7 +132,6 @@ export function TerminalComponent() {
     setCustomSL(defaultCalculatedSL);
   }, [defaultCalculatedSL, selectedInstId, arenaMode, selectedStrike]);
 
-  // Margin Calculation
   const capitalRequired = useMemo(() => {
     if (arenaMode === "FUTURES") {
       return parsedLots * activeInstrument.spanMargin;
@@ -148,7 +142,6 @@ export function TerminalComponent() {
     return parsedLots * activeInstrument.spanMargin;
   }, [arenaMode, orderSide, parsedLots, activeInstrument, selectedOptionPremium, totalQty]);
 
-  // Position Lists & Live PnL
   const arenaOpenPositions = (state.positions || []).filter((p) => p.segment === arenaMode);
   const arenaClosedPositions = (state.closedPositionsToday || []).filter((p) => p.segment === arenaMode);
 
@@ -167,7 +160,6 @@ export function TerminalComponent() {
   const currentDrawdown = totalPnL < 0 ? Math.abs(totalPnL) : 0;
   const isFloorBreached = currentDrawdown >= activeLossFloor;
 
-  // Planned Risk Engine
   const plannedRisk = Math.abs(activeExecutionPrice - customSL) * totalQty;
   const willBreach = currentDrawdown + plannedRisk > activeLossFloor || isFloorBreached;
 
@@ -406,7 +398,7 @@ export function TerminalComponent() {
 
       {/* MAIN WORKSPACE GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* LEFT WORKSPACE: FUTURES or 5-STRIKE OPTION CHAIN */}
+        {/* LEFT WORKSPACE */}
         <div className="lg:col-span-7 bg-[#151a23] border border-[#22283a] rounded-2xl p-5 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-start border-b border-[#22283a] pb-3">
@@ -437,7 +429,7 @@ export function TerminalComponent() {
               </div>
             )}
 
-            {/* 5-STRIKE OPTION CHAIN (50 PTS STEP) */}
+            {/* 5-STRIKE OPTION CHAIN */}
             {arenaMode === "OPTIONS" && (
               <div className="my-4 space-y-2">
                 <div className="flex justify-between items-center px-1 text-xs text-slate-400 font-bold uppercase">
@@ -459,7 +451,6 @@ export function TerminalComponent() {
                           isAtm ? "bg-[#182030] border-amber-400/60" : "bg-[#0f141d] border-[#1f2638]"
                         }`}
                       >
-                        {/* CE Button */}
                         <button
                           onClick={() => handleSelectOptionStrike(row.strike, "CE", row.ceLtp)}
                           className={`py-1.5 px-3 rounded-lg font-bold flex items-center justify-between transition-all ${
@@ -472,7 +463,6 @@ export function TerminalComponent() {
                           <span>₹{row.ceLtp}</span>
                         </button>
 
-                        {/* Strike & Tag */}
                         <div className="text-center">
                           <div className={`font-black ${isAtm ? "text-amber-400" : "text-white"}`}>
                             {row.strike}
@@ -486,7 +476,6 @@ export function TerminalComponent() {
                           </span>
                         </div>
 
-                        {/* PE Button */}
                         <button
                           onClick={() => handleSelectOptionStrike(row.strike, "PE", row.peLtp)}
                           className={`py-1.5 px-3 rounded-lg font-bold flex items-center justify-between transition-all ${
@@ -570,7 +559,7 @@ export function TerminalComponent() {
             </button>
           </div>
 
-          {/* LOTS INPUT (Fluid Typing) */}
+          {/* LOTS INPUT */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-slate-400">
               <span>Lots (Type directly or use steppers)</span>
@@ -708,125 +697,4 @@ export function TerminalComponent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-slate-400 border-b border-[#1f2638]">
-                    <th className="pb-2">Contract</th>
-                    <th className="pb-2">Type</th>
-                    <th className="pb-2">Side</th>
-                    <th className="pb-2">Qty</th>
-                    <th className="pb-2">Entry</th>
-                    <th className="pb-2">LTP</th>
-                    <th className="pb-2">Live P&L</th>
-                    <th className="pb-2 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1f2638]">
-                  {arenaOpenPositions.map((pos) => {
-                    const currentPrice =
-                      arenaMode === "FUTURES"
-                        ? bySymbol[pos.symbol]?.ltp ?? pos.currentPrice
-                        : pos.currentPrice;
-                    const diff =
-                      pos.side === "BUY" ? currentPrice - pos.entryPrice : pos.entryPrice - currentPrice;
-                    const pnl = diff * pos.qty;
-
-                    return (
-                      <tr key={pos.id} className="text-white font-mono">
-                        <td className="py-3 font-bold">{pos.symbol}</td>
-                        <td className="py-3">
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-bold">
-                            {pos.productType}
-                          </span>
-                        </td>
-                        <td className="py-3">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                              pos.side === "BUY"
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : "bg-rose-500/20 text-rose-400"
-                            }`}
-                          >
-                            {pos.side}
-                          </span>
-                        </td>
-                        <td className="py-3">
-                          {pos.qty} ({pos.lots}L)
-                        </td>
-                        <td className="py-3">₹{pos.entryPrice.toFixed(2)}</td>
-                        <td className="py-3 text-emerald-400">₹{currentPrice.toFixed(2)}</td>
-                        <td className={`py-3 font-black ${pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                          {pnl >= 0 ? `+₹${pnl.toFixed(2)}` : `-₹${Math.abs(pnl).toFixed(2)}`}
-                        </td>
-                        <td className="py-3 text-right">
-                          <button
-                            onClick={() => handleSquareOffSingle(pos.id)}
-                            className="px-2.5 py-1 rounded-lg bg-[#252f42] hover:bg-rose-600 text-slate-200 hover:text-white text-[11px] font-bold transition-colors"
-                          >
-                            Exit / Square Off
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ))}
-
-        {/* CLOSED TRADES TODAY TAB */}
-        {positionTab === "CLOSED" &&
-          (arenaClosedPositions.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500">
-              No closed trades recorded today. All realized positions will remain here until 12:00 AM Midnight.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-slate-400 border-b border-[#1f2638]">
-                    <th className="pb-2">Contract</th>
-                    <th className="pb-2">Type</th>
-                    <th className="pb-2">Side</th>
-                    <th className="pb-2">Qty</th>
-                    <th className="pb-2">Entry</th>
-                    <th className="pb-2">Exit Price</th>
-                    <th className="pb-2">Realized P&L</th>
-                    <th className="pb-2 text-right">Closed At</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1f2638]">
-                  {arenaClosedPositions.map((item) => (
-                    <tr key={item.id} className="text-white font-mono opacity-80">
-                      <td className="py-3 font-bold">{item.symbol}</td>
-                      <td className="py-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-bold">
-                          {item.productType}
-                        </span>
-                      </td>
-                      <td className="py-3 font-black">{item.side}</td>
-                      <td className="py-3">{item.qty}</td>
-                      <td className="py-3">₹{item.entryPrice.toFixed(2)}</td>
-                      <td className="py-3">₹{item.exitPrice.toFixed(2)}</td>
-                      <td
-                        className={`py-3 font-black ${
-                          item.realizedPnL >= 0 ? "text-emerald-400" : "text-rose-400"
-                        }`}
-                      >
-                        {item.realizedPnL >= 0
-                          ? `+₹${item.realizedPnL.toFixed(2)}`
-                          : `-₹${Math.abs(item.realizedPnL).toFixed(2)}`}
-                      </td>
-                      <td className="py-3 text-right text-slate-400">{item.closedAt}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-export default TerminalComponent;
+              <table

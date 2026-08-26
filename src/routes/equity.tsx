@@ -1,11 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  loadEquityPortfolio,
-  saveEquityPortfolio,
-  EquityPortfolioState,
-  EquityHolding,
-} from "../lib/equityStore";
 import {
   Search,
   LineChart,
@@ -17,14 +11,29 @@ import {
   CheckCircle,
   Plus,
   Minus,
-  Loader2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/equity")({
   component: EquityInvestmentsComponent,
 });
 
-interface ActiveStock {
+export interface EquityHolding {
+  id: string;
+  symbol: string;
+  name: string;
+  exchange: "NSE" | "BSE";
+  qty: number;
+  avgBuyPrice: number;
+  currentPrice: number;
+  totalInvested: number;
+}
+
+export interface EquityPortfolioState {
+  availableCash: number;
+  holdings: EquityHolding[];
+}
+
+interface StockItem {
   id: string;
   symbol: string;
   name: string;
@@ -34,67 +43,79 @@ interface ActiveStock {
   dayChangePct: number;
 }
 
-const DEFAULT_ACTIVE_STOCK: ActiveStock = {
-  id: "NSE_2885",
-  symbol: "RELIANCE",
-  name: "Reliance Industries Ltd",
-  token: "2885",
-  exchange: "NSE",
-  price: 2985.40,
-  dayChangePct: 1.15,
-};
+const STOCK_CATALOG: StockItem[] = [
+  { id: "NSE_RELIANCE", symbol: "RELIANCE", name: "Reliance Industries Ltd", token: "2885", exchange: "NSE", price: 2985.40, dayChangePct: 1.15 },
+  { id: "NSE_HDFCBANK", symbol: "HDFCBANK", name: "HDFC Bank Ltd", token: "1333", exchange: "NSE", price: 1642.30, dayChangePct: -0.45 },
+  { id: "NSE_ICICIBANK", symbol: "ICICIBANK", name: "ICICI Bank Ltd", token: "4963", exchange: "NSE", price: 1198.80, dayChangePct: 0.85 },
+  { id: "NSE_INFY", symbol: "INFY", name: "Infosys Ltd", token: "1594", exchange: "NSE", price: 1845.60, dayChangePct: -1.10 },
+  { id: "NSE_TCS", symbol: "TCS", name: "Tata Consultancy Services Ltd", token: "11536", exchange: "NSE", price: 4210.00, dayChangePct: 0.60 },
+  { id: "NSE_ITC", symbol: "ITC", name: "ITC Ltd", token: "1660", exchange: "NSE", price: 485.25, dayChangePct: 0.35 },
+  { id: "NSE_LT", symbol: "LT", name: "Larsen & Toubro Ltd", token: "11483", exchange: "NSE", price: 3620.00, dayChangePct: 1.40 },
+  { id: "NSE_SBIN", symbol: "SBIN", name: "State Bank of India", token: "3045", exchange: "NSE", price: 820.75, dayChangePct: 0.90 },
+  { id: "NSE_BHARTIARTL", symbol: "BHARTIARTL", name: "Bharti Airtel Ltd", token: "10604", exchange: "NSE", price: 1510.50, dayChangePct: 1.80 },
+  { id: "NSE_TATAMOTORS", symbol: "TATAMOTORS", name: "Tata Motors Ltd", token: "3456", exchange: "NSE", price: 985.60, dayChangePct: -0.80 },
+  { id: "NSE_TATASTEEL", symbol: "TATASTEEL", name: "Tata Steel Ltd", token: "3499", exchange: "NSE", price: 154.40, dayChangePct: 0.40 },
+  { id: "NSE_SUZLON", symbol: "SUZLON", name: "Suzlon Energy Ltd", token: "7172", exchange: "NSE", price: 78.50, dayChangePct: 2.30 },
+  { id: "BSE_532667", symbol: "SUZLON", name: "Suzlon Energy Ltd", token: "532667", exchange: "BSE", price: 78.45, dayChangePct: 2.25 },
+  { id: "NSE_IREDA", symbol: "IREDA", name: "Indian Renewable Energy Dev Agency", token: "20875", exchange: "NSE", price: 228.40, dayChangePct: 3.10 },
+  { id: "NSE_MAZDOCK", symbol: "MAZDOCK", name: "Mazagon Dock Shipbuilders Ltd", token: "2142", exchange: "NSE", price: 4320.00, dayChangePct: 1.75 },
+  { id: "NSE_ZOMATO", symbol: "ZOMATO", name: "Zomato Ltd", token: "5097", exchange: "NSE", price: 254.80, dayChangePct: 2.85 },
+  { id: "NSE_JIOFIN", symbol: "JIOFIN", name: "Jio Financial Services Ltd", token: "18143", exchange: "NSE", price: 332.40, dayChangePct: 0.75 },
+  { id: "NSE_TRENT", symbol: "TRENT", name: "Trent Ltd", token: "1964", exchange: "NSE", price: 6890.00, dayChangePct: 3.40 },
+  { id: "NSE_BEL", symbol: "BEL", name: "Bharat Electronics Ltd", token: "383", exchange: "NSE", price: 298.50, dayChangePct: 1.60 },
+  { id: "NSE_HAL", symbol: "HAL", name: "Hindustan Aeronautics Ltd", token: "2303", exchange: "NSE", price: 4720.00, dayChangePct: 2.20 },
+  { id: "BSE_500325", symbol: "RELIANCE", name: "Reliance Industries Ltd", token: "500325", exchange: "BSE", price: 2984.90, dayChangePct: 1.10 },
+  { id: "BSE_500180", symbol: "HDFCBANK", name: "HDFC Bank Ltd", token: "500180", exchange: "BSE", price: 1642.00, dayChangePct: -0.40 },
+  { id: "BSE_532540", symbol: "TCS", name: "Tata Consultancy Services Ltd", token: "532540", exchange: "BSE", price: 4210.00, dayChangePct: 0.60 },
+];
+
+const STORAGE_KEY = "capitalguard_equity_store_v2";
+
+function loadPortfolio(): EquityPortfolioState {
+  if (typeof window === "undefined") return { availableCash: 2500000, holdings: [] };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw
+      ? JSON.parse(raw)
+      : {
+          availableCash: 2500000,
+          holdings: [
+            { id: "HOLD-RELIANCE", symbol: "RELIANCE", name: "Reliance Industries Ltd", exchange: "NSE", qty: 150, avgBuyPrice: 2840.0, currentPrice: 2985.4, totalInvested: 426000 },
+            { id: "HOLD-TCS", symbol: "TCS", name: "Tata Consultancy Services Ltd", exchange: "NSE", qty: 80, avgBuyPrice: 3950.0, currentPrice: 4210.0, totalInvested: 316000 },
+          ],
+        };
+  } catch {
+    return { availableCash: 2500000, holdings: [] };
+  }
+}
+
+function savePortfolio(state: EquityPortfolioState) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
 export function EquityInvestmentsComponent() {
   const navigate = useNavigate();
-  const [portfolio, setPortfolio] = useState<EquityPortfolioState>(loadEquityPortfolio());
+  const [portfolio, setPortfolio] = useState<EquityPortfolioState>(loadPortfolio());
 
-  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [exchangeFilter, setExchangeFilter] = useState<"ALL" | "NSE" | "BSE">("ALL");
-  const [searchResults, setSearchResults] = useState<ActiveStock[]>([]);
-  const [isSearching, setIsSearching] = useState<boolean>(false);
 
-  // Selected Stock & Order Ticket State
-  const [selectedStock, setSelectedStock] = useState<ActiveStock>(DEFAULT_ACTIVE_STOCK);
+  const [selectedStock, setSelectedStock] = useState<StockItem>(STOCK_CATALOG[0]);
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [sharesQty, setSharesQty] = useState<number>(10);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Debounced API Search for All NSE/BSE Stocks
-  useEffect(() => {
-    if (!searchQuery || searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const delayTimer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/public/search-stocks?q=${encodeURIComponent(searchQuery)}&exchange=${exchangeFilter}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(
-            (data.results || []).map((s: any) => ({
-              ...s,
-              price: s.defaultPrice || 150.0,
-              dayChangePct: +(Math.random() * 3 - 1.2).toFixed(2),
-            }))
-          );
-        }
-      } catch (err) {
-        console.error("Failed to query stock catalog:", err);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 250);
-
-    return () => clearTimeout(delayTimer);
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return STOCK_CATALOG.slice(0, 8);
+    const q = searchQuery.toLowerCase().trim();
+    return STOCK_CATALOG.filter((s) => {
+      const matchExch = exchangeFilter === "ALL" || s.exchange === exchangeFilter;
+      const matchQuery = s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+      return matchExch && matchQuery;
+    });
   }, [searchQuery, exchangeFilter]);
 
-  // Aggregate Portfolio Math
   const totalInvested = useMemo(() => {
     return portfolio.holdings.reduce((acc, h) => acc + h.totalInvested, 0);
   }, [portfolio.holdings]);
@@ -107,15 +128,12 @@ export function EquityInvestmentsComponent() {
   const totalPnLPct = totalInvested > 0 ? (totalUnrealizedPnL / totalInvested) * 100 : 0;
   const totalPortfolioWealth = portfolio.availableCash + currentMarketValue;
 
-  // Order Calculations
   const totalOrderAmount = sharesQty * selectedStock.price;
-  const existingHolding = portfolio.holdings.find(
-    (h) => h.symbol === selectedStock.symbol
-  );
+  const existingHolding = portfolio.holdings.find((h) => h.symbol === selectedStock.symbol);
   const canBuy = portfolio.availableCash >= totalOrderAmount;
   const canSell = existingHolding && existingHolding.qty >= sharesQty;
 
-  const handleSelectStock = (stock: ActiveStock) => {
+  const handleSelectStock = (stock: StockItem) => {
     setSelectedStock(stock);
     setSearchQuery("");
   };
@@ -129,36 +147,22 @@ export function EquityInvestmentsComponent() {
         const newQty = existingHolding.qty + sharesQty;
         const newInvested = existingHolding.totalInvested + totalOrderAmount;
         const newAvg = newInvested / newQty;
-        const newCurVal = newQty * selectedStock.price;
 
         updatedHoldings = portfolio.holdings.map((h) =>
           h.symbol === selectedStock.symbol
-            ? {
-                ...h,
-                qty: newQty,
-                avgBuyPrice: newAvg,
-                totalInvested: newInvested,
-                currentPrice: selectedStock.price,
-                currentValue: newCurVal,
-                unrealizedPnL: newCurVal - newInvested,
-                unrealizedPnLPct: ((newCurVal - newInvested) / newInvested) * 100,
-              }
+            ? { ...h, qty: newQty, avgBuyPrice: newAvg, totalInvested: newInvested, currentPrice: selectedStock.price }
             : h
         );
       } else {
-        const newCurVal = sharesQty * selectedStock.price;
         const newHolding: EquityHolding = {
-          id: `HOLD-${selectedStock.exchange}_${selectedStock.symbol}`,
+          id: `HOLD-${selectedStock.exchange}_${selectedStock.symbol}_${Date.now()}`,
           symbol: selectedStock.symbol,
           name: selectedStock.name,
+          exchange: selectedStock.exchange,
           qty: sharesQty,
           avgBuyPrice: selectedStock.price,
           currentPrice: selectedStock.price,
           totalInvested: totalOrderAmount,
-          currentValue: newCurVal,
-          unrealizedPnL: 0,
-          unrealizedPnLPct: 0,
-          sector: selectedStock.exchange,
         };
         updatedHoldings = [newHolding, ...portfolio.holdings];
       }
@@ -168,9 +172,9 @@ export function EquityInvestmentsComponent() {
         holdings: updatedHoldings,
       };
 
-      saveEquityPortfolio(updatedState);
+      savePortfolio(updatedState);
       setPortfolio(updatedState);
-      setNotification(`Bought ${sharesQty} shares of ${selectedStock.symbol} on ${selectedStock.exchange} (CNC Delivery)`);
+      setNotification(`Bought ${sharesQty} shares of ${selectedStock.symbol} on${selectedStock.exchange} (CNC Delivery)`);
       setTimeout(() => setNotification(null), 3500);
     } else {
       if (!canSell || !existingHolding) return;
@@ -181,18 +185,10 @@ export function EquityInvestmentsComponent() {
       } else {
         const remainingQty = existingHolding.qty - sharesQty;
         const remainingInvested = remainingQty * existingHolding.avgBuyPrice;
-        const curVal = remainingQty * selectedStock.price;
 
         updatedHoldings = portfolio.holdings.map((h) =>
           h.symbol === selectedStock.symbol
-            ? {
-                ...h,
-                qty: remainingQty,
-                totalInvested: remainingInvested,
-                currentValue: curVal,
-                unrealizedPnL: curVal - remainingInvested,
-                unrealizedPnLPct: ((curVal - remainingInvested) / remainingInvested) * 100,
-              }
+            ? { ...h, qty: remainingQty, totalInvested: remainingInvested, currentPrice: selectedStock.price }
             : h
         );
       }
@@ -202,9 +198,9 @@ export function EquityInvestmentsComponent() {
         holdings: updatedHoldings,
       };
 
-      saveEquityPortfolio(updatedState);
+      savePortfolio(updatedState);
       setPortfolio(updatedState);
-      setNotification(`Sold ${sharesQty} shares of ${selectedStock.symbol} on ${selectedStock.exchange} (CNC Delivery)`);
+      setNotification(`Sold ${sharesQty} shares of ${selectedStock.symbol} on${selectedStock.exchange} (CNC Delivery)`);
       setTimeout(() => setNotification(null), 3500);
     }
   };
@@ -216,7 +212,7 @@ export function EquityInvestmentsComponent() {
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
             <LineChart className="w-4 h-4" />
-            <span>Universal Equity Investments (NSE & BSE Cash Delivery)</span>
+            <span>Equity Investments Realm (NSE & BSE Cash Delivery)</span>
           </div>
           <div className="text-xl md:text-2xl font-black text-white flex items-baseline gap-2">
             <span>₹{totalPortfolioWealth.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
@@ -280,7 +276,7 @@ export function EquityInvestmentsComponent() {
         </div>
       </div>
 
-      {/* UNIVERSAL NSE & BSE SEARCH BAR */}
+      {/* UNIVERSAL SEARCH BAR */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl bg-[#151a23] border border-[#22283a] p-1 text-xs">
@@ -307,10 +303,9 @@ export function EquityInvestmentsComponent() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`Search any stock on ${exchangeFilter === "ALL" ? "NSE & BSE (7,000+ stocks)" : exchangeFilter} (e.g. Suzlon, Tata Steel, IREDA, Mazdock)...`}
+              placeholder="Search stock across NSE & BSE (e.g. Suzlon, Reliance, IREDA, Tata Motors, TCS)..."
               className="w-full bg-transparent text-sm text-white placeholder-slate-500 font-medium focus:outline-none"
             />
-            {isSearching && <Loader2 className="w-4 h-4 text-emerald-400 animate-spin mr-2" />}
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
@@ -322,13 +317,9 @@ export function EquityInvestmentsComponent() {
           </div>
 
           {/* Autocomplete Dropdown */}
-          {searchQuery.trim().length >= 2 && (
+          {searchQuery.trim().length > 0 && (
             <div className="absolute z-30 left-0 right-0 mt-2 bg-[#151a23] border border-[#2c354a] rounded-2xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto">
-              {isSearching ? (
-                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> Searching exchange master database...
-                </div>
-              ) : searchResults.length === 0 ? (
+              {searchResults.length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-400">
                   No stocks found matching "{searchQuery}" on {exchangeFilter}.
                 </div>
@@ -349,7 +340,7 @@ export function EquityInvestmentsComponent() {
                       </span>
                       <div>
                         <div className="text-xs font-black text-white">{stock.symbol}</div>
-                        <div className="text-[11px] text-slate-400 truncate max-w-xs">{stock.name}</div>
+                        <div className="text-[11px] text-slate-400">{stock.name}</div>
                       </div>
                     </div>
 
@@ -448,7 +439,6 @@ export function EquityInvestmentsComponent() {
             <span className="text-sm font-black font-mono text-emerald-400">₹{selectedStock.price.toFixed(2)}</span>
           </div>
 
-          {/* BUY / SELL Switch */}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setOrderSide("BUY")}
@@ -468,7 +458,6 @@ export function EquityInvestmentsComponent() {
             </button>
           </div>
 
-          {/* Shares Quantity */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-slate-400">
               <span>Quantity (Shares)</span>
@@ -497,7 +486,6 @@ export function EquityInvestmentsComponent() {
             </div>
           </div>
 
-          {/* Amount Math */}
           <div className="space-y-2 pt-2 text-xs border-t border-[#22283a]">
             <div className="flex justify-between">
               <span className="text-slate-400">Price per Share:</span>
@@ -515,7 +503,6 @@ export function EquityInvestmentsComponent() {
             </div>
           </div>
 
-          {/* Order Action Button */}
           <button
             type="button"
             disabled={orderSide === "BUY" ? !canBuy : !canSell}
@@ -554,7 +541,7 @@ export function EquityInvestmentsComponent() {
 
         {portfolio.holdings.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-500">
-            No stock holdings yet. Use the universal search bar above to find and buy delivery shares across NSE & BSE.
+            No stock holdings yet. Use the search bar above to find and buy delivery shares across NSE & BSE.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -584,7 +571,7 @@ export function EquityInvestmentsComponent() {
                       </td>
                       <td className="py-3">
                         <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-bold">
-                          {h.sector || "NSE"}
+                          {h.exchange}
                         </span>
                       </td>
                       <td className="py-3 font-bold">{h.qty}</td>
@@ -597,15 +584,8 @@ export function EquityInvestmentsComponent() {
                       <td className="py-3 text-right">
                         <button
                           onClick={() => {
-                            setSelectedStock({
-                              id: h.id,
-                              symbol: h.symbol,
-                              name: h.name,
-                              token: "0",
-                              exchange: (h.sector as "NSE" | "BSE") || "NSE",
-                              price: h.currentPrice,
-                              dayChangePct: 0.5,
-                            });
+                            const found = STOCK_CATALOG.find((s) => s.symbol === h.symbol && s.exchange === h.exchange);
+                            if (found) setSelectedStock(found);
                           }}
                           className="px-2.5 py-1 rounded-lg bg-[#252f42] hover:bg-emerald-600 text-slate-200 hover:text-white text-[11px] font-bold transition-colors"
                         >
