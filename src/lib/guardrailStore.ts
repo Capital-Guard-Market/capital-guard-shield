@@ -46,7 +46,7 @@ export interface GuardrailState {
   closedPositionsToday: ClosedPosition[];
 }
 
-const STORAGE_KEY = "capitalguard_store_v5";
+const STORAGE_KEY = "capitalguard_store_v6";
 
 export function getTodayISTDate(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -87,11 +87,10 @@ export function loadGuardrailState(): GuardrailState {
 
     // Midnight Rollover (Passed 12:00 AM IST)
     if (state.lockedDate && state.lockedDate !== today) {
-      // 1. Calculate new rolling capital
       const newFuturesCap = Math.max(100000, state.futures.capital + state.futures.realizedPnL);
       const newOptionsCap = Math.max(50000, state.options.capital + state.options.realizedPnL);
 
-      // 2. Retain ONLY NRML (Carry Forward) open positions; auto-drop MIS
+      // Retain only Carry Forward (NRML) positions overnight
       const retainedPositions = (state.positions || []).filter(
         (p) => p.productType === "NRML"
       );
@@ -112,14 +111,18 @@ export function loadGuardrailState(): GuardrailState {
           realizedPnL: 0,
         },
         positions: retainedPositions,
-        closedPositionsToday: [], // Clear yesterday's closed trades
+        closedPositionsToday: [],
       };
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(rolled));
       return rolled;
     }
 
-    return state;
+    return {
+      ...state,
+      positions: state.positions || [],
+      closedPositionsToday: state.closedPositionsToday || [],
+    };
   } catch {
     return DEFAULT_STATE;
   }
