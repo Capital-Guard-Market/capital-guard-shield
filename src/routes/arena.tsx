@@ -32,7 +32,7 @@ export function ArenaGatewayComponent() {
   const todayKey = getTodayKey();
 
   const [selectedRealm, setSelectedRealm] = useState<"INVESTMENT" | "FNO" | null>(null);
-  const [selectedTier, setSelectedTier] = useState(SIMULTANEOUS_RISK_TIERS[1]); // ₹50,000 default
+  const [selectedTier, setSelectedTier] = useState(SIMULTANEOUS_RISK_TIERS[1]!); // ₹50,000 default
 
   const handleEnterInvestments = () => {
     localStorage.setItem("capitalguard_realm", "investment");
