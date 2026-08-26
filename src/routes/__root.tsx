@@ -10,6 +10,9 @@ import {
   Lock,
 } from "lucide-react";
 
+// Load application CSS & Tailwind styles
+import "../index.css";
+
 export const Route = createRootRoute({
   component: RootLayout,
   notFoundComponent: () => (
