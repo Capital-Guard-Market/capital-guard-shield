@@ -13,7 +13,7 @@ export type LiveQuote = {
 
 export type LiveMarketFeed = {
   status: "IDLE" | "LIVE_CONNECTED" | "FALLBACK_OFFLINE" | "AUTH_FAILED" | "NO_DATA" | "SERVER_ERROR";
-  message?: string;
+  message?: string | undefined;
   quotes: LiveQuote[];
   bySymbol: Record<string, LiveQuote>;
   isLive: boolean;

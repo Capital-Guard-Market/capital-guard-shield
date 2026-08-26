@@ -88,7 +88,7 @@ export function PositionsComponent() {
             ...pos,
             currentPrice: newPrice,
             pnl: Number(pnl.toFixed(2)),
-            status: slTriggered ? "CLOSED" : pos.status,
+            status: (slTriggered ? "CLOSED" : pos.status) as "OPEN" | "CLOSED",
           };
         });
 
