@@ -38,6 +38,7 @@ function getTodayKey() {
 
 export function TerminalComponent() {
   const navigate = useNavigate();
+  const live = useLiveMarket(2000);
   const todayKey = getTodayKey();
 
   // Guardrail state
