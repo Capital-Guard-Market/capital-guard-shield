@@ -52,7 +52,7 @@ export function TerminalComponent() {
   // Active Instrument
   const [activeTab, setActiveTab] = useState<"INDEX" | "STOCK">("INDEX");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedItem, setSelectedItem] = useState(FNO_INSTRUMENTS[0]);
+  const [selectedItem, setSelectedItem] = useState(FNO_INSTRUMENTS[0]!);
   const [optionType, setOptionType] = useState<"CE" | "PE">("CE");
   const [strike, setStrike] = useState<number>(24800);
 
