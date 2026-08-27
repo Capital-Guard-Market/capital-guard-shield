@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShieldAlert,
   Lock,
@@ -8,6 +8,9 @@ import {
   ArrowRight,
   Flame,
   CheckCircle2,
+  Wallet,
+  Percent,
+  Layers,
 } from "lucide-react";
 
 export const Route = createFileRoute("/risk-gate")({
@@ -16,20 +19,53 @@ export const Route = createFileRoute("/risk-gate")({
 
 function RiskGatePage() {
   const navigate = useNavigate();
-  const [maxLoss, setMaxLoss] = useState<number>(5000);
+
+  // Rolling capital pools (default base values or loaded from previous session)
+  const [optionsCapital, setOptionsCapital] = useState<number>(1000000); // 10 Lakhs
+  const [futuresCapital, setFuturesCapital] = useState<number>(5000000); // 50 Lakhs
+
+  // Percentage guardrail selection: 5%, 10%, or 20%
+  const [guardrailPercent, setGuardrailPercent] = useState<5 | 10 | 20>(5);
+  
+  // Execution constraints
   const [maxTrades, setMaxTrades] = useState<number>(5);
   const [riskPerTrade, setRiskPerTrade] = useState<number>(2);
   const [isLocked, setIsLocked] = useState<boolean>(false);
 
+  // Load existing capital if stored in state
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem("capitalguard_state");
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        if (parsed.optionsCapital) setOptionsCapital(parsed.optionsCapital);
+        if (parsed.futuresCapital) setFuturesCapital(parsed.futuresCapital);
+      }
+    } catch {
+      // Use defaults
+    }
+  }, []);
+
+  // Calculate dynamic ₹ circuits from rolling capital
+  const calculatedOptionsMaxLoss = (optionsCapital * guardrailPercent) / 100;
+  const calculatedFuturesMaxLoss = (futuresCapital * guardrailPercent) / 100;
+  const calculatedCombinedMaxLoss = calculatedOptionsMaxLoss + calculatedFuturesMaxLoss;
+
   const handleLockAndEnter = () => {
-    // Save daily guardrail rules in localStorage
-    const guardrails = {
-      maxLoss,
+    // Persist active risk rules for live execution engine enforcement
+    const guardrailRules = {
+      guardrailPercent,
+      optionsCapital,
+      futuresCapital,
+      optionsMaxLoss: calculatedOptionsMaxLoss,
+      futuresMaxLoss: calculatedFuturesMaxLoss,
+      combinedMaxLoss: calculatedCombinedMaxLoss,
       maxTrades,
       riskPerTrade,
       lockedAt: new Date().toISOString(),
     };
-    localStorage.setItem("capitalguard_rules", JSON.stringify(guardrails));
+
+    localStorage.setItem("capitalguard_rules", JSON.stringify(guardrailRules));
     setIsLocked(true);
 
     setTimeout(() => {
@@ -39,56 +75,113 @@ function RiskGatePage() {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 space-y-6">
-      {/* Title */}
+      {/* Header */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-widest">
           <ShieldAlert className="w-3.5 h-3.5" /> Pre-Session Risk Protocol
         </div>
         <h1 className="text-2xl md:text-3xl font-black text-white">
-          Lock Today's Unbreachable Guardrails
+          Rolling Capital Guardrails
         </h1>
         <p className="text-xs text-slate-400 max-w-lg mx-auto">
-          Once locked, these limits are non-negotiable and strictly enforced by the execution engine until midnight.
+          Enforce strict percentage-based loss circuits over dynamic rolling capital before entering the F&O Arena.
         </p>
       </div>
 
-      {/* Guardrail Controls */}
+      {/* Main Guardrail Configuration Box */}
       <div className="p-6 rounded-2xl bg-[#0e131d] border border-[#1e2638] space-y-6">
-        {/* Max Daily Loss Limit */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
-              <Flame className="w-4 h-4 text-red-400" />
-              Maximum Daily Loss Circuit (₹)
-            </label>
-            <span className="text-sm font-black text-red-400">
-              ₹{maxLoss.toLocaleString("en-IN")}
-            </span>
+        
+        {/* ACTIVE ROLLING CAPITAL OVERVIEW */}
+        <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-[#090d14] border border-[#1a2233]">
+          <div>
+            <div className="text-[10px] uppercase font-black text-slate-400 flex items-center gap-1.5">
+              <Zap className="w-3 h-3 text-amber-400" /> Options Pool (Rolling)
+            </div>
+            <div className="text-base md:text-lg font-black text-amber-400 mt-1">
+              ₹{optionsCapital.toLocaleString("en-IN")}
+            </div>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {[2000, 5000, 10000, 25000].map((val) => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => setMaxLoss(val)}
-                className={`py-2 rounded-xl text-xs font-bold transition-all border ${
-                  maxLoss === val
-                    ? "bg-red-500/20 border-red-500 text-red-300 shadow-md shadow-red-500/10"
-                    : "bg-[#151b26] border-[#242d40] text-slate-400 hover:text-white"
-                }`}
-              >
-                ₹{val.toLocaleString("en-IN")}
-              </button>
-            ))}
+          <div>
+            <div className="text-[10px] uppercase font-black text-slate-400 flex items-center gap-1.5">
+              <Layers className="w-3 h-3 text-blue-400" /> Futures Pool (Rolling)
+            </div>
+            <div className="text-base md:text-lg font-black text-blue-400 mt-1">
+              ₹{futuresCapital.toLocaleString("en-IN")}
+            </div>
           </div>
         </div>
 
-        {/* Max Allowed Trades */}
+        {/* 5%, 10%, 20% GUARDRAIL SELECTOR */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <Percent className="w-4 h-4 text-amber-400" />
+              Maximum Daily Loss Circuit
+            </label>
+            <span className="text-xs font-black text-amber-400 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30">
+              {guardrailPercent}% Rolling Capital
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { pct: 5, tag: "Conservative", desc: "Safe capital preservation" },
+              { pct: 10, tag: "Balanced", desc: "Standard intraday buffer" },
+              { pct: 20, tag: "Dynamic Max", desc: "High volatility expansion" },
+            ].map(({ pct, tag, desc }) => {
+              const selected = guardrailPercent === pct;
+              return (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => setGuardrailPercent(pct as 5 | 10 | 20)}
+                  className={`p-3.5 rounded-xl text-left border transition-all flex flex-col justify-between space-y-2 ${
+                    selected
+                      ? "bg-amber-500/15 border-amber-500 text-white shadow-lg shadow-amber-500/10"
+                      : "bg-[#151b26] border-[#242d40] text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-black text-white">{pct}%</span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                        selected
+                          ? "bg-amber-500 text-slate-950 font-black"
+                          : "bg-slate-800 text-slate-400"
+                      }`}
+                    >
+                      {tag}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-tight">{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* COMPUTED ₹ CIRCUIT VALUES */}
+        <div className="grid md:grid-cols-2 gap-3 p-4 rounded-xl bg-[#121824] border border-[#1f293d]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-300 font-bold">Options Loss Limit ({guardrailPercent}%):</span>
+            <span className="text-xs font-black text-red-400">
+              -₹{calculatedOptionsMaxLoss.toLocaleString("en-IN")}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-300 font-bold">Futures Loss Limit ({guardrailPercent}%):</span>
+            <span className="text-xs font-black text-red-400">
+              -₹{calculatedFuturesMaxLoss.toLocaleString("en-IN")}
+            </span>
+          </div>
+        </div>
+
+        {/* MAX TRADES TODAY */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-400" />
-              Max Orders Allowed Today
+              Max Allowed Orders Today
             </label>
             <span className="text-sm font-black text-amber-400">
               {maxTrades} Trades
@@ -112,7 +205,7 @@ function RiskGatePage() {
           </div>
         </div>
 
-        {/* Max Risk Per Trade */}
+        {/* RISK PER TRADE */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -120,7 +213,7 @@ function RiskGatePage() {
               Risk Capital Per Trade (%)
             </label>
             <span className="text-sm font-black text-blue-400">
-              {riskPerTrade}%
+              {riskPerTrade}% Allocation
             </span>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -141,15 +234,15 @@ function RiskGatePage() {
           </div>
         </div>
 
-        {/* Warning Banner */}
+        {/* UNBREACHABLE NOTICE */}
         <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-[11px] text-amber-200/90 leading-relaxed">
-            If your cumulative intraday losses reach <strong>₹{maxLoss.toLocaleString("en-IN")}</strong> or order count reaches <strong>{maxTrades}</strong>, the F&O Arena locks automatically for the remainder of the trading day.
+            If your Options losses hit <strong>₹{calculatedOptionsMaxLoss.toLocaleString("en-IN")}</strong> or Futures losses hit <strong>₹{calculatedFuturesMaxLoss.toLocaleString("en-IN")}</strong> ({guardrailPercent}% of dynamic rolling capital), the terminal locks immediately until midnight.
           </p>
         </div>
 
-        {/* Action Button */}
+        {/* LOCK & ENTER ACTION */}
         <button
           onClick={handleLockAndEnter}
           disabled={isLocked}
@@ -158,12 +251,12 @@ function RiskGatePage() {
           {isLocked ? (
             <>
               <CheckCircle2 className="w-4 h-4 text-slate-950" />
-              <span>Guardrails Locked — Entering Arena...</span>
+              <span>Guardrails Locked ({guardrailPercent}%) — Entering Arena...</span>
             </>
           ) : (
             <>
               <Lock className="w-4 h-4" />
-              <span>Lock Guardrails & Enter F&O Arena</span>
+              <span>Lock {guardrailPercent}% Guardrails & Enter Arena</span>
               <ArrowRight className="w-4 h-4" />
             </>
           )}
