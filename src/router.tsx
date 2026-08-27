@@ -10,10 +10,8 @@ export function createRouter() {
   return router;
 }
 
-// TanStack Start hydration export
+// TanStack Start required exports
 export const getRouter = createRouter;
-
-export const router = createRouter();
 
 declare module "@tanstack/react-router" {
   interface Register {
