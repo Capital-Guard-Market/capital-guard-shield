@@ -4,22 +4,38 @@ import {
   ShieldAlert,
   Zap,
   Lock,
-  Unlock,
   Flame,
-  CheckCircle2,
   Percent,
   Layers,
   AlertTriangle,
   ArrowRight,
   SlidersHorizontal,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/arena")({
   component: UnifiedArenaPage,
 });
 
+interface ActivePosition {
+  id: string;
+  instrument: string;
+  strike: number;
+  type: "CE" | "PE";
+  buyPrice: number;
+  currentPrice: number;
+  qty: number;
+  sl: number;
+  target: number;
+  pnl: number;
+}
+
 function UnifiedArenaPage() {
-  // State: Guardrails
+  // --- GUARDRAIL STATE ---
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [guardrailPercent, setGuardrailPercent] = useState<5 | 10 | 20>(5);
   const [optionsCapital, setOptionsCapital] = useState<number>(1000000); // ₹10 Lakhs
@@ -27,16 +43,24 @@ function UnifiedArenaPage() {
   const [maxTrades, setMaxTrades] = useState<number>(5);
   const [riskPerTrade, setRiskPerTrade] = useState<number>(2);
 
-  // State: Live Trading
+  // --- LIVE MARKET STATE ---
+  const [spots, setSpots] = useState({
+    NIFTY: { ltp: 24520.85, open: 24434.45, change: 86.40, pct: 0.35, lotSize: 25, flash: "" },
+    BANKNIFTY: { ltp: 51840.10, open: 51952.40, change: -112.30, pct: -0.22, lotSize: 15, flash: "" },
+    FINNIFTY: { ltp: 23610.50, open: 23565.35, change: 45.15, pct: 0.19, lotSize: 25, flash: "" },
+  });
+
+  // --- TRADING STATE ---
   const [selectedInstrument, setSelectedInstrument] = useState<"NIFTY" | "BANKNIFTY" | "FINNIFTY">("NIFTY");
   const [activeTab, setActiveTab] = useState<"OPTIONS" | "FUTURES">("OPTIONS");
   const [selectedStrike, setSelectedStrike] = useState<number>(24500);
   const [optionType, setOptionType] = useState<"CE" | "PE">("CE");
-  const [lots, setLots] = useState<number>(2);
-  const [executedTrades, setExecutedTrades] = useState<number>(0);
+  const [lots, setLots] = useState<number>(1);
+  const [executedTradesCount, setExecutedTradesCount] = useState<number>(0);
   const [realizedPnL, setRealizedPnL] = useState<number>(0);
+  const [positions, setPositions] = useState<ActivePosition[]>([]);
 
-  // Load saved guardrails on component mount
+  // Load saved rules on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem("capitalguard_rules");
@@ -56,21 +80,94 @@ function UnifiedArenaPage() {
     }
   }, []);
 
-  // Dynamic calculations
+  // --- REAL-TIME TICKER & POSITION SIMULATOR (1-SECOND TICKS) ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSpots((prev) => {
+        const randomize = (val: number, spread: number) => {
+          const delta = (Math.random() - 0.49) * spread;
+          return Number((val + delta).toFixed(2));
+        };
+
+        const newNifty = randomize(prev.NIFTY.ltp, 2.5);
+        const newBankNifty = randomize(prev.BANKNIFTY.ltp, 6.0);
+        const newFinNifty = randomize(prev.FINNIFTY.ltp, 3.0);
+
+        return {
+          NIFTY: {
+            ...prev.NIFTY,
+            ltp: newNifty,
+            change: Number((newNifty - prev.NIFTY.open).toFixed(2)),
+            pct: Number((((newNifty - prev.NIFTY.open) / prev.NIFTY.open) * 100).toFixed(2)),
+            flash: newNifty >= prev.NIFTY.ltp ? "text-emerald-400" : "text-red-400",
+          },
+          BANKNIFTY: {
+            ...prev.BANKNIFTY,
+            ltp: newBankNifty,
+            change: Number((newBankNifty - prev.BANKNIFTY.open).toFixed(2)),
+            pct: Number((((newBankNifty - prev.BANKNIFTY.open) / prev.BANKNIFTY.open) * 100).toFixed(2)),
+            flash: newBankNifty >= prev.BANKNIFTY.ltp ? "text-emerald-400" : "text-red-400",
+          },
+          FINNIFTY: {
+            ...prev.FINNIFTY,
+            ltp: newFinNifty,
+            change: Number((newFinNifty - prev.FINNIFTY.open).toFixed(2)),
+            pct: Number((((newFinNifty - prev.FINNIFTY.open) / prev.FINNIFTY.open) * 100).toFixed(2)),
+            flash: newFinNifty >= prev.FINNIFTY.ltp ? "text-emerald-400" : "text-red-400",
+          },
+        };
+      });
+
+      // Update Active Positions P&L & Auto Stop-Loss Checker
+      setPositions((prev) =>
+        prev.map((pos) => {
+          const tickDelta = (Math.random() - 0.48) * 0.75;
+          const updatedPrice = Math.max(1, Number((pos.currentPrice + tickDelta).toFixed(2)));
+          const updatedPnl = Number(((updatedPrice - pos.buyPrice) * pos.qty).toFixed(2));
+
+          // AUTO HARD STOP-LOSS TRIGGER
+          if (updatedPrice <= pos.sl) {
+            setRealizedPnL((prevRealized) => prevRealized + updatedPnl);
+            alert(`🚨 HARD STOP-LOSS TRIGGERED: Auto squared-off ${pos.instrument} ${pos.strike} ${pos.type} at ₹${updatedPrice}`);
+            return null as unknown as ActivePosition;
+          }
+
+          return {
+            ...pos,
+            currentPrice: updatedPrice,
+            pnl: updatedPnl,
+          };
+        }).filter(Boolean)
+      );
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Guardrail Circuit Calculations
   const calculatedOptionsMaxLoss = (optionsCapital * guardrailPercent) / 100;
   const calculatedFuturesMaxLoss = (futuresCapital * guardrailPercent) / 100;
-
-  const spots = {
-    NIFTY: { ltp: 24520.85, chg: "+86.40 (+0.35%)", positive: true, lotSize: 25 },
-    BANKNIFTY: { ltp: 51840.10, chg: "-112.30 (-0.22%)", positive: false, lotSize: 15 },
-    FINNIFTY: { ltp: 23610.50, chg: "+45.15 (+0.19%)", positive: true, lotSize: 25 },
-  };
-
   const currentLotSize = spots[selectedInstrument].lotSize;
   const totalQuantity = lots * currentLotSize;
-  const estimatedPremium = optionType === "CE" ? 142.50 : 118.20;
-  const estimatedCost = totalQuantity * estimatedPremium;
-  const strictStopLoss = optionType === "CE" ? 114.00 : 94.50;
+
+  // Real-time Strike Pricing Formula based on current Spot
+  const currentSpotLtp = spots[selectedInstrument].ltp;
+  const roundedAtm = Math.round(currentSpotLtp / 50) * 50;
+
+  const calculateOptionPrice = (strike: number, type: "CE" | "PE") => {
+    const diff = currentSpotLtp - strike;
+    let base = 125.0;
+    if (type === "CE") {
+      base = 125.0 + diff * 0.52;
+    } else {
+      base = 125.0 - diff * 0.48;
+    }
+    return Math.max(8.5, Number(base.toFixed(2)));
+  };
+
+  const selectedContractLtp = calculateOptionPrice(selectedStrike, optionType);
+  const estimatedCost = totalQuantity * selectedContractLtp;
+  const strictStopLoss = Number((selectedContractLtp * 0.80).toFixed(2)); // Auto 20% Hard SL
 
   const handleLockGuardrails = () => {
     const rules = {
@@ -88,23 +185,42 @@ function UnifiedArenaPage() {
     setIsLocked(true);
   };
 
-  const handleUnlockToEdit = () => {
-    setIsLocked(false);
-  };
-
   const handlePlaceOrder = () => {
-    if (executedTrades >= maxTrades) {
-      alert("Circuit Breaker Active: Maximum allowed daily trades reached.");
+    if (executedTradesCount >= maxTrades) {
+      alert("🚨 CIRCUIT BREAKER: Maximum daily allowed orders reached!");
       return;
     }
-    alert(
-      `Order Placed: ${selectedInstrument} ${selectedStrike} ${optionType} | Qty: ${totalQuantity} | SL Locked: ₹${strictStopLoss}`
-    );
-    setExecutedTrades((prev) => prev + 1);
+
+    const newPos: ActivePosition = {
+      id: Math.random().toString(),
+      instrument: selectedInstrument,
+      strike: selectedStrike,
+      type: optionType,
+      buyPrice: selectedContractLtp,
+      currentPrice: selectedContractLtp,
+      qty: totalQuantity,
+      sl: strictStopLoss,
+      target: Number((selectedContractLtp * 1.40).toFixed(2)),
+      pnl: 0,
+    };
+
+    setPositions((prev) => [newPos, ...prev]);
+    setExecutedTradesCount((prev) => prev + 1);
   };
 
+  const handleSquareOff = (id: string) => {
+    const pos = positions.find((p) => p.id === id);
+    if (pos) {
+      setRealizedPnL((prev) => prev + pos.pnl);
+      setPositions((prev) => prev.filter((p) => p.id !== id));
+    }
+  };
+
+  // --- UNREALIZED PNL SUM ---
+  const totalUnrealizedPnL = positions.reduce((acc, curr) => acc + curr.pnl, 0);
+
   // ==========================================
-  // VIEW 1: GUARDRAIL GATE (IF NOT LOCKED)
+  // SCREEN 1: PRE-SESSION RISK LOCK SCREEN
   // ==========================================
   if (!isLocked) {
     return (
@@ -117,12 +233,11 @@ function UnifiedArenaPage() {
             Lock Today's Rolling Guardrails
           </h1>
           <p className="text-xs text-slate-400 max-w-lg mx-auto">
-            Select your daily risk limit. Once locked, the F&O execution engine enforces these circuits automatically.
+            Select your risk parameters. Live pricing and execution activate once locked.
           </p>
         </div>
 
         <div className="p-6 rounded-2xl bg-[#0e131d] border border-[#1e2638] space-y-6">
-          {/* ROLLING POOLS */}
           <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-[#090d14] border border-[#1a2233]">
             <div>
               <div className="text-[10px] uppercase font-black text-slate-400 flex items-center gap-1.5">
@@ -142,107 +257,50 @@ function UnifiedArenaPage() {
             </div>
           </div>
 
-          {/* 5%, 10%, 20% SELECTOR */}
+          {/* 5, 10, 20% SELECTION */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                <Percent className="w-4 h-4 text-amber-400" />
-                Maximum Daily Loss Circuit
+                <Percent className="w-4 h-4 text-amber-400" /> Maximum Loss Circuit
               </label>
               <span className="text-xs font-black text-amber-400 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30">
                 {guardrailPercent}% Rolling Capital
               </span>
             </div>
-
             <div className="grid grid-cols-3 gap-3">
               {[
                 { pct: 5, tag: "Conservative", desc: "Safe capital preservation" },
                 { pct: 10, tag: "Balanced", desc: "Standard intraday buffer" },
                 { pct: 20, tag: "Dynamic Max", desc: "High volatility expansion" },
-              ].map(({ pct, tag, desc }) => {
-                const selected = guardrailPercent === pct;
-                return (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setGuardrailPercent(pct as 5 | 10 | 20)}
-                    className={`p-3.5 rounded-xl text-left border transition-all flex flex-col justify-between space-y-2 ${
-                      selected
-                        ? "bg-amber-500/15 border-amber-500 text-white shadow-lg shadow-amber-500/10"
-                        : "bg-[#151b26] border-[#242d40] text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-black text-white">{pct}%</span>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                          selected
-                            ? "bg-amber-500 text-slate-950 font-black"
-                            : "bg-slate-800 text-slate-400"
-                        }`}
-                      >
-                        {tag}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 leading-tight">{desc}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ₹ LOSS CIRCUIT PREVIEW */}
-          <div className="grid md:grid-cols-2 gap-3 p-4 rounded-xl bg-[#121824] border border-[#1f293d]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-300 font-bold">Options Loss Limit ({guardrailPercent}%):</span>
-              <span className="text-xs font-black text-red-400">
-                -₹{calculatedOptionsMaxLoss.toLocaleString("en-IN")}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-300 font-bold">Futures Loss Limit ({guardrailPercent}%):</span>
-              <span className="text-xs font-black text-red-400">
-                -₹{calculatedFuturesMaxLoss.toLocaleString("en-IN")}
-              </span>
-            </div>
-          </div>
-
-          {/* MAX TRADES */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" />
-                Max Allowed Orders Today
-              </label>
-              <span className="text-sm font-black text-amber-400">
-                {maxTrades} Trades
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[3, 5, 8, 12].map((num) => (
+              ].map(({ pct, tag, desc }) => (
                 <button
-                  key={num}
+                  key={pct}
                   type="button"
-                  onClick={() => setMaxTrades(num)}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all border ${
-                    maxTrades === num
-                      ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10"
+                  onClick={() => setGuardrailPercent(pct as 5 | 10 | 20)}
+                  className={`p-3.5 rounded-xl text-left border transition-all flex flex-col justify-between space-y-2 ${
+                    guardrailPercent === pct
+                      ? "bg-amber-500/15 border-amber-500 text-white shadow-lg shadow-amber-500/10"
                       : "bg-[#151b26] border-[#242d40] text-slate-400 hover:text-white"
                   }`}
                 >
-                  {num} Trades
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-black text-white">{pct}%</span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-slate-800 text-slate-400">
+                      {tag}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">{desc}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* LOCK BUTTON */}
           <button
             onClick={handleLockGuardrails}
             className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 active:scale-[0.99]"
           >
             <Lock className="w-4 h-4" />
-            <span>Lock {guardrailPercent}% Guardrails & Enter Arena</span>
+            <span>Lock {guardrailPercent}% Guardrails & Launch Live Arena</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -251,11 +309,13 @@ function UnifiedArenaPage() {
   }
 
   // ==========================================
-  // VIEW 2: ACTIVE F&O TRADING TERMINAL
+  // SCREEN 2: LIVE F&O ARENA TERMINAL
   // ==========================================
+  const activeSpot = spots[selectedInstrument];
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      {/* ACTIVE GUARDRAIL HUD */}
+      {/* ACTIVE GUARDRAIL HUD BANNER */}
       <div className="p-4 rounded-2xl bg-[#0e131d] border border-amber-500/30 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -264,40 +324,52 @@ function UnifiedArenaPage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-black uppercase tracking-wider text-amber-400">
-                Guardrail Protocol Enforced
+                Guardrail Active
               </span>
               <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
-                {guardrailPercent}% Rolling Max
+                {guardrailPercent}% Loss Max
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Live Feed
               </span>
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
-              Loss Circuit: <strong className="text-red-400">-₹{(activeTab === "OPTIONS" ? calculatedOptionsMaxLoss : calculatedFuturesMaxLoss).toLocaleString("en-IN")}</strong> | Trades: <strong className="text-white">{executedTrades}/{maxTrades}</strong>
+              Loss Circuit: <strong className="text-red-400">-₹{(activeTab === "OPTIONS" ? calculatedOptionsMaxLoss : calculatedFuturesMaxLoss).toLocaleString("en-IN")}</strong> | Trades: <strong className="text-white">{executedTradesCount}/{maxTrades}</strong>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* P&L METERS */}
+        <div className="flex items-center gap-6">
           <div className="text-right">
-            <div className="text-[10px] uppercase font-bold text-slate-400">Today's Realized P&L</div>
+            <div className="text-[10px] uppercase font-bold text-slate-400">Unrealized P&L</div>
+            <div className={`text-sm font-black ${totalUnrealizedPnL >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {totalUnrealizedPnL >= 0 ? `+₹${totalUnrealizedPnL.toFixed(2)}` : `-₹${Math.abs(totalUnrealizedPnL).toFixed(2)}`}
+            </div>
+          </div>
+          <div className="text-right border-l border-[#1f283d] pl-4">
+            <div className="text-[10px] uppercase font-bold text-slate-400">Realized P&L</div>
             <div className={`text-base font-black ${realizedPnL >= 0 ? "text-emerald-400" : "text-red-400"}`}>
               {realizedPnL >= 0 ? `+₹${realizedPnL.toLocaleString("en-IN")}` : `-₹${Math.abs(realizedPnL).toLocaleString("en-IN")}`}
             </div>
           </div>
           <button
-            onClick={handleUnlockToEdit}
+            onClick={() => setIsLocked(false)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161d2b] border border-[#242f44] text-xs font-bold text-slate-300 hover:text-white"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
-            <span>Adjust</span>
+            <span>Rules</span>
           </button>
         </div>
       </div>
 
-      {/* INSTRUMENT TICKER BAR */}
+      {/* REAL-TIME TICKER HEADER */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {(["NIFTY", "BANKNIFTY", "FINNIFTY"] as const).map((inst) => {
           const isSelected = selectedInstrument === inst;
           const data = spots[inst];
+          const isPositive = data.change >= 0;
+
           return (
             <button
               key={inst}
@@ -309,12 +381,15 @@ function UnifiedArenaPage() {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-white">{inst} INDEX</span>
-                <span className={`text-xs font-black ${data.positive ? "text-emerald-400" : "text-red-400"}`}>
-                  {data.chg}
+                <span className="text-xs font-black text-white flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> {inst} SPOT
+                </span>
+                <span className={`text-xs font-black flex items-center gap-0.5 ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                  {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {isPositive ? `+${data.change}` : data.change} ({data.pct}%)
                 </span>
               </div>
-              <div className="text-xl font-black text-white mt-1">
+              <div className={`text-2xl font-black tracking-tight mt-1 transition-colors duration-300 ${data.flash || "text-white"}`}>
                 ₹{data.ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </div>
             </button>
@@ -322,16 +397,16 @@ function UnifiedArenaPage() {
         })}
       </div>
 
-      {/* MAIN EXECUTION WORKSPACE */}
+      {/* LIVE WORKSPACE */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* OPTION CHAIN TABLE */}
+        {/* LEFT 2 COLUMNS: DYNAMIC STRIKE CHAIN */}
         <div className="lg:col-span-2 p-5 rounded-2xl bg-[#0e131d] border border-[#1e2638] space-y-4">
           <div className="flex items-center justify-between border-b border-[#1c2333] pb-3">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-400" />
               <h2 className="text-sm font-black text-white uppercase tracking-wider">
-                {selectedInstrument} Strike Chain
+                {selectedInstrument} Live Strike Matrix
               </h2>
             </div>
             <div className="flex gap-1.5">
@@ -351,43 +426,49 @@ function UnifiedArenaPage() {
             </div>
           </div>
 
+          {/* DYNAMIC STRIKE CHAIN ROWS */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400 border-b border-[#1c2333]">
-                  <th className="py-2.5 px-3">Call LTP (CE)</th>
-                  <th className="py-2.5 px-3 text-center">Strike</th>
-                  <th className="py-2.5 px-3 text-right">Put LTP (PE)</th>
+                  <th className="py-2.5 px-3">Call Price (CE)</th>
+                  <th className="py-2.5 px-3 text-center">Strike Price</th>
+                  <th className="py-2.5 px-3 text-right">Put Price (PE)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#151c28]">
-                {[24400, 24450, 24500, 24550, 24600].map((strike) => {
-                  const isAtm = strike === 24500;
+                {[-100, -50, 0, 50, 100].map((offset) => {
+                  const strike = roundedAtm + offset;
+                  const isAtm = offset === 0;
+                  const cePrice = calculateOptionPrice(strike, "CE");
+                  const pePrice = calculateOptionPrice(strike, "PE");
                   const isCeSelected = selectedStrike === strike && optionType === "CE";
                   const isPeSelected = selectedStrike === strike && optionType === "PE";
 
                   return (
                     <tr key={strike} className={isAtm ? "bg-amber-500/5" : ""}>
-                      <td className="py-2.5 px-3">
+                      {/* CE BUTTON */}
+                      <td className="py-2 px-3">
                         <button
                           onClick={() => {
                             setSelectedStrike(strike);
                             setOptionType("CE");
                           }}
-                          className={`w-full py-1.5 px-2.5 rounded-lg font-black text-left flex items-center justify-between border transition-all ${
+                          className={`w-full py-2 px-3 rounded-lg font-black text-left flex items-center justify-between border transition-all ${
                             isCeSelected
                               ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
                               : "bg-[#131924] border-transparent text-slate-300 hover:border-slate-600"
                           }`}
                         >
-                          <span>₹{(140 + (24500 - strike) * 0.45).toFixed(2)}</span>
-                          <span className="text-[10px] text-emerald-400 font-bold">BUY</span>
+                          <span className="font-mono">₹{cePrice.toFixed(2)}</span>
+                          <span className="text-[10px] text-emerald-400 font-bold">BUY CE</span>
                         </button>
                       </td>
 
-                      <td className="py-2.5 px-3 text-center font-black text-white">
+                      {/* STRIKE BADGE */}
+                      <td className="py-2 px-3 text-center font-black text-white">
                         <div className="flex flex-col items-center">
-                          <span>{strike}</span>
+                          <span className="text-sm font-mono">{strike}</span>
                           {isAtm && (
                             <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest">
                               ATM
@@ -396,20 +477,21 @@ function UnifiedArenaPage() {
                         </div>
                       </td>
 
-                      <td className="py-2.5 px-3 text-right">
+                      {/* PE BUTTON */}
+                      <td className="py-2 px-3 text-right">
                         <button
                           onClick={() => {
                             setSelectedStrike(strike);
                             setOptionType("PE");
                           }}
-                          className={`w-full py-1.5 px-2.5 rounded-lg font-black text-right flex items-center justify-between border transition-all ${
+                          className={`w-full py-2 px-3 rounded-lg font-black text-right flex items-center justify-between border transition-all ${
                             isPeSelected
                               ? "bg-red-500/20 border-red-500 text-red-300"
                               : "bg-[#131924] border-transparent text-slate-300 hover:border-slate-600"
                           }`}
                         >
-                          <span className="text-[10px] text-red-400 font-bold">BUY</span>
-                          <span>₹{(120 + (strike - 24500) * 0.45).toFixed(2)}</span>
+                          <span className="text-[10px] text-red-400 font-bold">BUY PE</span>
+                          <span className="font-mono">₹{pePrice.toFixed(2)}</span>
                         </button>
                       </td>
                     </tr>
@@ -418,29 +500,73 @@ function UnifiedArenaPage() {
               </tbody>
             </table>
           </div>
+
+          {/* ACTIVE POSITIONS LIVE WIDGET */}
+          {positions.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-[#1c2333] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-white flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" /> Active Intraday Positions ({positions.length})
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold">Auto 20% Hard SL Enabled</span>
+              </div>
+              <div className="space-y-2">
+                {positions.map((pos) => (
+                  <div
+                    key={pos.id}
+                    className="p-3 rounded-xl bg-[#090d14] border border-[#1b2333] flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="font-black text-white">
+                        {pos.instrument} {pos.strike} {pos.type} ({pos.qty} Qty)
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Buy: ₹{pos.buyPrice} | SL: <strong className="text-red-400">₹{pos.sl}</strong> | LTP: ₹{pos.currentPrice}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className={`font-black ${pos.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {pos.pnl >= 0 ? `+₹${pos.pnl.toFixed(2)}` : `-₹${Math.abs(pos.pnl).toFixed(2)}`}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleSquareOff(pos.id)}
+                        className="px-2.5 py-1 rounded bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white text-[10px] font-black transition-all"
+                      >
+                        Exit
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ORDER EXECUTION TICKET */}
+        {/* RIGHT COLUMN: ORDER EXECUTION TICKET */}
         <div className="p-5 rounded-2xl bg-[#0e131d] border border-[#1e2638] space-y-4 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-[#1c2333] pb-3">
               <h3 className="text-sm font-black text-white">Order Execution</h3>
-              <span className="text-[10px] uppercase font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-500/10">
-                Auto-SL Enforced
+              <span className="text-[10px] uppercase font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                20% Hard-SL Locked
               </span>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#121824] border border-[#1d273a] space-y-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Contract Selected</div>
+            <div className="p-3.5 rounded-xl bg-[#121824] border border-[#1d273a] space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Selected Contract</div>
               <div className="text-sm font-black text-white">
                 {selectedInstrument} {selectedStrike} {optionType}
               </div>
-              <div className="text-xs text-amber-400 font-bold">
-                LTP: ₹{estimatedPremium.toFixed(2)}
+              <div className="text-xs text-amber-400 font-bold flex items-center justify-between">
+                <span>Live LTP:</span>
+                <span className="font-mono text-sm">₹{selectedContractLtp.toFixed(2)}</span>
               </div>
             </div>
 
-            {/* LOT SELECTOR */}
+            {/* LOT SIZE SELECTOR */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold text-slate-300">
                 <span>Lots (1 Lot = {currentLotSize} Qty)</span>
@@ -463,19 +589,19 @@ function UnifiedArenaPage() {
               </div>
             </div>
 
-            {/* RISK & SL CARD */}
-            <div className="p-3 rounded-xl bg-[#090d14] border border-[#1c2436] space-y-2 text-xs">
+            {/* MARGIN & SL DETAILS */}
+            <div className="p-3.5 rounded-xl bg-[#090d14] border border-[#1c2436] space-y-2 text-xs">
               <div className="flex justify-between text-slate-400">
                 <span>Required Margin:</span>
-                <span className="font-bold text-white">₹{estimatedCost.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                <span className="font-bold text-white font-mono">₹{estimatedCost.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Hard Stop-Loss:</span>
-                <span className="font-bold text-red-400">₹{strictStopLoss.toFixed(2)} (-20%)</span>
+                <span>Hard Stop-Loss (20%):</span>
+                <span className="font-bold text-red-400 font-mono">₹{strictStopLoss.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Max Trade Risk:</span>
-                <span className="font-bold text-red-400">-₹{((estimatedPremium - strictStopLoss) * totalQuantity).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                <span className="font-bold text-red-400 font-mono">-₹{((selectedContractLtp - strictStopLoss) * totalQuantity).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
               </div>
             </div>
           </div>
