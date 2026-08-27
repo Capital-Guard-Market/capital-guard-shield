@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Shield, TrendingUp, Zap, ArrowRight, ShieldCheck, Lock } from "lucide-react";
+import { Shield, TrendingUp, Zap, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: GatewayPage,
@@ -54,15 +54,15 @@ function GatewayPage() {
             <div>
               <h2 className="text-xl font-black text-white">F&O Derivatives Realm</h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Futures & Options trading backed by unbreachable stop-loss math and daily loss circuits.
+                Futures & Options trading backed by unbreachable 5%, 10%, 20% stop-loss math and rolling circuits.
               </p>
             </div>
           </div>
           <Link
-            to="/risk-gate"
+            to="/arena"
             className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
           >
-            <span>Select Today's Guardrails</span>
+            <span>Enter F&O Arena</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
