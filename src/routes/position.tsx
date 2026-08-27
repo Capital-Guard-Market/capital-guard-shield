@@ -1,279 +1,384 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { 
-  ShieldCheck, 
-  TrendingUp, 
-  TrendingDown, 
-  AlertTriangle, 
-  ChevronLeft, 
-  Activity, 
-  Flame, 
-  Zap 
+import {
+  Briefcase,
+  Zap,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Archive,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+  ShieldAlert,
 } from "lucide-react";
 
 export const Route = createFileRoute("/position")({
-  component: PositionsComponent,
+  component: UnifiedPositionsPage,
 });
 
-interface Position {
+interface PositionItem {
   id: string;
-  symbol: string;
-  baseSymbol?: string;
-  arena: "FUTURES" | "OPTIONS";
-  orderSide: "BUY" | "SELL";
-  lots: number;
-  lotSize: number;
-  quantity: number;
-  entryPrice: number;
+  instrument: string;
+  strike: number;
+  type: "CE" | "PE" | "FUT";
+  buyPrice: number;
   currentPrice: number;
-  stopLoss: number;
-  marginUsed?: number;
+  exitPrice?: number;
+  qty: number;
+  sl: number;
+  target?: number;
   pnl: number;
+  orderId: string;
+  productType: "INTRADAY" | "CARRYFORWARD";
+  entryTime: string;
+  exitTime?: string;
   status: "OPEN" | "CLOSED";
-  timestamp: string;
+  date: string; // YYYY-MM-DD (IST)
 }
 
-export function PositionsComponent() {
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [dailyLimit, setDailyLimit] = useState<number>(50000);
-  const [filterMode, setFilterMode] = useState<"ALL" | "FUTURES" | "OPTIONS">("ALL");
+function UnifiedPositionsPage() {
+  const [filter, setFilter] = useState<"ALL" | "FUTURES" | "OPTIONS">("ALL");
+  const [positions, setPositions] = useState<PositionItem[]>([]);
+  const [realizedPnL, setRealizedPnL] = useState<number>(0);
+  const [currentIstDate, setCurrentIstDate] = useState<string>("");
 
-  useEffect(() => {
+  // Get Current IST Date (YYYY-MM-DD)
+  const getTodayIST = () => {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  };
+
+  // --- IST MIDNIGHT AUTO-RESET & SYNC ENGINE ---
+  const syncAndCheckMidnightRollover = () => {
     try {
-      const saved = localStorage.getItem("capitalguard_positions");
-      const limit = Number(localStorage.getItem("capitalguard_daily_limit")) || 50000;
-      setDailyLimit(limit);
+      const today = getTodayIST();
+      setCurrentIstDate(today);
 
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const normalized = parsed.map((p) => ({
-            ...p,
-            arena: (p.arena || "OPTIONS").toUpperCase() as "FUTURES" | "OPTIONS",
-            lots: Number(p.lots) || 1,
-            lotSize: Number(p.lotSize) || 50,
-            quantity: Number(p.quantity) || (Number(p.lots) || 1) * (Number(p.lotSize) || 50),
-            entryPrice: Number(p.entryPrice) || 100,
-            currentPrice: Number(p.currentPrice) || Number(p.entryPrice) || 100,
-            stopLoss: Number(p.stopLoss) || 0,
-            pnl: Number(p.pnl) || 0,
-            status: (p.status === "CLOSED" ? "CLOSED" : "OPEN") as "OPEN" | "CLOSED",
-          }));
-          setPositions(normalized);
-        }
-      }
-    } catch (e) {}
-  }, []);
+      const savedPosRaw = localStorage.getItem("capitalguard_positions");
+      const savedDate = localStorage.getItem("capitalguard_last_session_date");
 
-  // ⚡ Live Momentum Tick Engine
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPositions((prev) => {
-        let hasChanged = false;
-        const updated = prev.map((pos) => {
-          if (pos.status === "CLOSED") return pos;
+      let allPositions: PositionItem[] = savedPosRaw ? JSON.parse(savedPosRaw) : [];
 
-          const jitterPercent = (Math.random() * 0.3 - 0.15) / 100;
-          const newPrice = Number(Math.max(0.05, pos.currentPrice * (1 + jitterPercent)).toFixed(2));
-          
-          const qty = Number(pos.quantity) || (pos.lots * pos.lotSize) || 1;
-          const pnl = Number(
-            (pos.orderSide === "BUY" ? newPrice - pos.entryPrice : pos.entryPrice - newPrice) * qty
+      // MIDNIGHT CHECK: If the date has changed in IST
+      if (savedDate && savedDate !== today) {
+        // 1. Separate yesterday's closed trades from open carryforward trades
+        const yesterdayClosed = allPositions.filter(
+          (p) => p.date !== today && p.status === "CLOSED"
+        );
+        const carryforwardOpen = allPositions.filter(
+          (p) => p.status === "OPEN" && p.productType === "CARRYFORWARD"
+        );
+
+        // 2. Archive closed trades to Trade Journal permanently
+        if (yesterdayClosed.length > 0) {
+          const existingArchive = JSON.parse(
+            localStorage.getItem("capitalguard_journal_archive") || "[]"
           );
-
-          const slTriggered = pos.orderSide === "BUY" ? newPrice <= pos.stopLoss : newPrice >= pos.stopLoss;
-
-          hasChanged = true;
-          return {
-            ...pos,
-            currentPrice: newPrice,
-            pnl: Number(pnl.toFixed(2)),
-            status: (slTriggered ? "CLOSED" : pos.status) as "OPEN" | "CLOSED",
-          };
-        });
-
-        if (hasChanged) {
-          try {
-            localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
-          } catch (e) {}
+          const updatedArchive = [...yesterdayClosed, ...existingArchive];
+          localStorage.setItem("capitalguard_journal_archive", JSON.stringify(updatedArchive));
         }
-        return updated;
-      });
-    }, 1500);
 
+        // 3. Reset Intraday Book: Keep only open carryforward positions
+        allPositions = carryforwardOpen.map((p) => ({
+          ...p,
+          date: today, // Roll date to today
+        }));
+
+        localStorage.setItem("capitalguard_positions", JSON.stringify(allPositions));
+        localStorage.setItem("capitalguard_last_session_date", today);
+        setRealizedPnL(0);
+      } else {
+        if (!savedDate) {
+          localStorage.setItem("capitalguard_last_session_date", today);
+        }
+
+        // Calculate Realized PnL strictly for TODAY'S session
+        const todayRealized = allPositions
+          .filter((p) => p.date === today && p.status === "CLOSED")
+          .reduce((sum, p) => sum + p.pnl, 0);
+
+        setRealizedPnL(todayRealized);
+      }
+
+      setPositions(allPositions);
+    } catch (e) {
+      console.error("Position Engine Sync Error:", e);
+    }
+  };
+
+  useEffect(() => {
+    syncAndCheckMidnightRollover();
+    // Check rollover every 5 seconds
+    const interval = setInterval(syncAndCheckMidnightRollover, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const filteredPositions = positions.filter((p) => {
-    if (filterMode === "ALL") return true;
-    return p.arena === filterMode;
+  // --- LIVE TICKS SIMULATION FOR OPEN POSITIONS ---
+  useEffect(() => {
+    const tickInterval = setInterval(() => {
+      setPositions((prev) =>
+        prev.map((pos) => {
+          if (pos.status !== "OPEN") return pos;
+
+          // Subtle tick delta
+          const delta = (Math.random() - 0.48) * 0.75;
+          const updatedPrice = Math.max(1, Number((pos.currentPrice + delta).toFixed(2)));
+          const updatedPnl = Number(((updatedPrice - pos.buyPrice) * pos.qty).toFixed(2));
+
+          // Auto Stop-Loss Trigger at -20% Hard SL floor
+          if (updatedPrice <= pos.sl) {
+            return {
+              ...pos,
+              currentPrice: updatedPrice,
+              exitPrice: updatedPrice,
+              pnl: updatedPnl,
+              status: "CLOSED",
+              exitTime: new Date().toLocaleTimeString("en-IN"),
+            };
+          }
+
+          return {
+            ...pos,
+            currentPrice: updatedPrice,
+            pnl: updatedPnl,
+          };
+        })
+      );
+    }, 1000);
+
+    return () => clearInterval(tickInterval);
+  }, []);
+
+  // 1-Click Square Off Handler
+  const handleSquareOff = (id: string) => {
+    const updated = positions.map((pos) => {
+      if (pos.id === id && pos.status === "OPEN") {
+        return {
+          ...pos,
+          status: "CLOSED" as const,
+          exitPrice: pos.currentPrice,
+          exitTime: new Date().toLocaleTimeString("en-IN"),
+        };
+      }
+      return pos;
+    });
+
+    setPositions(updated);
+    localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
+
+    const today = getTodayIST();
+    const newRealized = updated
+      .filter((p) => p.date === today && p.status === "CLOSED")
+      .reduce((sum, p) => sum + p.pnl, 0);
+
+    setRealizedPnL(newRealized);
+  };
+
+  // Filtered lists
+  const openPositions = positions.filter((p) => {
+    if (p.status !== "OPEN") return false;
+    if (filter === "FUTURES") return p.type === "FUT";
+    if (filter === "OPTIONS") return p.type === "CE" || p.type === "PE";
+    return true;
   });
 
-  const openPositions = filteredPositions.filter((p) => p.status === "OPEN");
-  const closedPositions = filteredPositions.filter((p) => p.status === "CLOSED");
+  const closedPositions = positions.filter((p) => {
+    if (p.status !== "CLOSED") return false;
+    if (filter === "FUTURES") return p.type === "FUT";
+    if (filter === "OPTIONS") return p.type === "CE" || p.type === "PE";
+    return true;
+  });
 
-  // Combined calculations across ALL positions
-  const totalUnrealized = positions.filter(p => p.status === "OPEN").reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
-  const totalRealized = positions.filter(p => p.status === "CLOSED").reduce((acc, p) => acc + (Number(p.pnl) || 0), 0);
-  const combinedNetPnL = totalUnrealized + totalRealized;
-
-  const handleSquareOff = (id: string) => {
-    const updated = positions.map((p) => (p.id === id ? { ...p, status: "CLOSED" as const } : p));
-    setPositions(updated);
-    localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
-  };
-
-  const handleSquareOffAll = () => {
-    const updated = positions.map((p) => ({ ...p, status: "CLOSED" as const }));
-    setPositions(updated);
-    localStorage.setItem("capitalguard_positions", JSON.stringify(updated));
-  };
+  const unrealizedPnL = openPositions.reduce((sum, p) => sum + p.pnl, 0);
+  const totalBookPnL = realizedPnL + unrealizedPnL;
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
-      
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <Link
-          to="/terminal"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#151A23] border border-[#222B3A] text-xs font-bold text-slate-300 hover:text-white"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          <span>Return to Terminal</span>
-        </Link>
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+      {/* HEADER BAR */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-white flex items-center gap-2">
+            <Briefcase className="w-6 h-6 text-amber-400" /> Unified Positions Book
+          </h1>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Real-time multi-asset derivatives book. Intraday metrics reset daily at 12:00:00 AM IST.
+          </p>
+        </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
-            <Activity className="w-3.5 h-3.5 animate-pulse" />
-            <span>UNIFIED TICK ENGINE</span>
+        <Link
+          to="/arena"
+          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-amber-500/10"
+        >
+          <Zap className="w-3.5 h-3.5" /> F&O Arena
+        </Link>
+      </div>
+
+      {/* TOTAL COMBINED P&L BANNER */}
+      <div className="p-6 rounded-2xl bg-[#0c111c] border border-[#1a2336] text-center space-y-3">
+        <div className="text-[11px] uppercase font-black tracking-widest text-slate-400">
+          Combined F&O Session Profit & Loss (IST Book)
+        </div>
+        <div
+          className={`text-3xl md:text-4xl font-black tracking-tight font-mono ${
+            totalBookPnL >= 0 ? "text-emerald-400" : "text-red-400"
+          }`}
+        >
+          {totalBookPnL >= 0 ? `+₹${totalBookPnL.toFixed(2)}` : `-₹${Math.abs(totalBookPnL).toFixed(2)}`}
+        </div>
+        <div className="flex justify-center items-center gap-6 text-xs text-slate-400 pt-1">
+          <div>
+            Realized (Today):{" "}
+            <strong className={realizedPnL >= 0 ? "text-emerald-400" : "text-red-400"}>
+              {realizedPnL >= 0 ? `+₹${realizedPnL.toFixed(2)}` : `-₹${Math.abs(realizedPnL).toFixed(2)}`}
+            </strong>
+          </div>
+          <span className="text-slate-600">•</span>
+          <div>
+            Unrealized:{" "}
+            <strong className={unrealizedPnL >= 0 ? "text-emerald-400" : "text-red-400"}>
+              {unrealizedPnL >= 0 ? `+₹${unrealizedPnL.toFixed(2)}` : `-₹${Math.abs(unrealizedPnL).toFixed(2)}`}
+            </strong>
           </div>
         </div>
       </div>
 
-      {/* Hero Combined PnL Banner */}
-      <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-6 text-center shadow-xl space-y-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-          COMBINED F&amp;O PROFIT &amp; LOSS (SIMULTANEOUS BOOK)
-        </span>
-        <div className={`text-3xl sm:text-4xl font-mono font-black ${combinedNetPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-          {combinedNetPnL >= 0 ? `+₹${combinedNetPnL.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `-₹${Math.abs(combinedNetPnL).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        </div>
-        <div className="flex justify-center gap-6 text-xs font-mono text-slate-400 pt-1">
-          <span>Realized: <b className={totalRealized >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalRealized.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></span>
-          <span>•</span>
-          <span>Unrealized: <b className={totalUnrealized >= 0 ? "text-emerald-400" : "text-rose-400"}>₹{totalUnrealized.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></span>
-        </div>
+      {/* FILTER TABS */}
+      <div className="flex gap-2 border-b border-[#182133] pb-3">
+        {[
+          { key: "ALL", label: `All Contracts (${positions.length})` },
+          { key: "OPTIONS", label: `Options Only (${positions.filter((p) => p.type !== "FUT").length})` },
+          { key: "FUTURES", label: `Futures Only (${positions.filter((p) => p.type === "FUT").length})` },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key as any)}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all ${
+              filter === key
+                ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/10"
+                : "bg-[#101724] text-slate-400 hover:text-white"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Filter Tabs: ALL, FUTURES, OPTIONS */}
-      <div className="flex items-center gap-2 bg-[#151A23] p-1 rounded-xl border border-[#222B3A] w-fit">
-        <button
-          onClick={() => setFilterMode("ALL")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${filterMode === "ALL" ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:text-white"}`}
-        >
-          All Contracts ({positions.filter(p => p.status === "OPEN").length})
-        </button>
-        <button
-          onClick={() => setFilterMode("FUTURES")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${filterMode === "FUTURES" ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:text-white"}`}
-        >
-          Futures Only ({positions.filter(p => p.arena === "FUTURES" && p.status === "OPEN").length})
-        </button>
-        <button
-          onClick={() => setFilterMode("OPTIONS")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${filterMode === "OPTIONS" ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:text-white"}`}
-        >
-          Options Only ({positions.filter(p => p.arena === "OPTIONS" && p.status === "OPEN").length})
-        </button>
-      </div>
-
-      {/* Open Positions List */}
+      {/* SECTION 1: LIVE OPEN POSITIONS */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">
-            Open Positions ({openPositions.length})
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            Open Live Positions ({openPositions.length})
           </h2>
-          {openPositions.length > 0 && (
-            <button
-              onClick={handleSquareOffAll}
-              className="text-xs font-bold text-rose-400 hover:text-rose-300 underline underline-offset-4"
-            >
-              Square Off All ({openPositions.length})
-            </button>
-          )}
+          <span className="text-[10px] text-amber-400 font-bold">20% Hard-SL Auto Enforced</span>
         </div>
 
         {openPositions.length === 0 ? (
-          <div className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-8 text-center text-slate-500 text-xs">
-            No active open trades in this category. Place orders in the F&amp;O Terminal.
+          <div className="p-8 rounded-2xl bg-[#0c111c] border border-[#1a2336] text-center text-xs text-slate-500">
+            No active open trades in this category. Place orders in the F&O Terminal.
           </div>
         ) : (
-          openPositions.map((pos) => (
-            <div
-              key={pos.id}
-              className="bg-[#151A23] border border-[#222B3A] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg hover:border-slate-700 transition"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-white text-sm">{pos.symbol}</span>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                    pos.arena === "FUTURES" ? "bg-sky-500/10 text-sky-400 border border-sky-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                  }`}>
-                    {pos.arena}
-                  </span>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                    pos.orderSide === "BUY" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                  }`}>
-                    {pos.orderSide} {pos.lots}L ({pos.quantity} Qty)
-                  </span>
+          <div className="grid gap-3">
+            {openPositions.map((pos) => (
+              <div
+                key={pos.id}
+                className="p-4 rounded-xl bg-[#0c111c] border border-[#1d273a] hover:border-slate-600 transition-all flex flex-wrap items-center justify-between gap-4"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-sm text-white">
+                      {pos.instrument} {pos.strike} {pos.type}
+                    </span>
+                    <span
+                      className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
+                        pos.productType === "CARRYFORWARD"
+                          ? "bg-blue-500/20 text-blue-300"
+                          : "bg-amber-500/20 text-amber-300"
+                      }`}
+                    >
+                      {pos.productType === "CARRYFORWARD" ? "NRML" : "MIS"}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">({pos.qty} Qty)</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-3">
+                    <span>Entry: <strong className="text-white">₹{pos.buyPrice}</strong></span>
+                    <span>LTP: <strong className="text-amber-400">₹{pos.currentPrice}</strong></span>
+                    <span>Stop-Loss: <strong className="text-red-400">₹{pos.sl} (-20%)</strong></span>
+                    {pos.target && <span>Target: <strong className="text-emerald-400">₹{pos.target}</strong></span>}
+                  </div>
                 </div>
-                <div className="text-xs font-mono text-slate-400 mt-1 space-x-3">
-                  <span>Entry: <b className="text-slate-200">₹{pos.entryPrice}</b></span>
-                  <span>LTP: <b className="text-amber-400">₹{pos.currentPrice}</b></span>
-                  <span>SL: <b className="text-rose-400">₹{pos.stopLoss}</b></span>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between sm:justify-end gap-4">
-                <div className={`text-base font-mono font-black ${pos.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                  {pos.pnl >= 0 ? `+₹${pos.pnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : `-₹${Math.abs(pos.pnl).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase font-bold text-slate-400">Floating P&L</div>
+                    <div
+                      className={`text-base font-black font-mono ${
+                        pos.pnl >= 0 ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {pos.pnl >= 0 ? `+₹${pos.pnl.toFixed(2)}` : `-₹${Math.abs(pos.pnl).toFixed(2)}`}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleSquareOff(pos.id)}
+                    className="px-3 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500 text-red-300 hover:text-white text-xs font-black transition-all border border-red-500/30"
+                  >
+                    Square Off
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleSquareOff(pos.id)}
-                  className="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs shadow-md transition"
-                >
-                  Exit Trade
-                </button>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Closed Positions History */}
-      {closedPositions.length > 0 && (
-        <div className="space-y-3 pt-3">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">
-            Closed Positions History ({closedPositions.length})
+      {/* SECTION 2: TODAY'S CLOSED POSITIONS */}
+      <div className="space-y-3 pt-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+            Today's Closed Trades ({closedPositions.length})
           </h2>
-          {closedPositions.map((pos) => (
-            <div
-              key={pos.id}
-              className="bg-[#151A23]/60 border border-[#222B3A] rounded-2xl p-3.5 flex items-center justify-between opacity-80"
-            >
-              <div>
-                <span className="font-bold text-white text-xs">{pos.symbol} ({pos.arena})</span>
-                <span className="text-[10px] text-slate-500 font-mono block">
-                  Closed • Entry: ₹{pos.entryPrice} • Exit: ₹{pos.currentPrice}
-                </span>
-              </div>
-              <div className={`text-xs font-mono font-bold ${pos.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                {pos.pnl >= 0 ? `+₹${pos.pnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : `-₹${Math.abs(pos.pnl).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
-              </div>
-            </div>
-          ))}
+          <span className="text-[10px] text-slate-500 font-bold">Resets at 12:00 AM IST</span>
         </div>
-      )}
+
+        {closedPositions.length === 0 ? (
+          <div className="p-6 rounded-xl bg-[#090d14] border border-[#141b29] text-center text-xs text-slate-500">
+            No closed positions yet today.
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {closedPositions.map((pos) => (
+              <div
+                key={pos.id}
+                className="p-3.5 rounded-xl bg-[#090d14] border border-[#161f30] flex items-center justify-between text-xs"
+              >
+                <div>
+                  <div className="font-bold text-slate-200">
+                    {pos.instrument} {pos.strike} {pos.type} ({pos.qty} Qty)
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Entry: ₹{pos.buyPrice} • Exit: ₹{pos.exitPrice} • {pos.exitTime}
+                  </div>
+                </div>
+
+                <div
+                  className={`font-black font-mono text-sm ${
+                    pos.pnl >= 0 ? "text-emerald-400" : "text-red-400"
+                  }`}
+                >
+                  {pos.pnl >= 0 ? `+₹${pos.pnl.toFixed(2)}` : `-₹${Math.abs(pos.pnl).toFixed(2)}`}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+export default UnifiedPositionsPage;
