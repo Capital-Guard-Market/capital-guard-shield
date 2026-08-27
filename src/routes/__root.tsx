@@ -1,194 +1,123 @@
+import { createRootRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
-  Outlet,
-  ScrollRestoration,
-  createRootRoute,
-  HeadContent,
-  Scripts,
-  Link,
-  useLocation,
-} from "@tanstack/react-router";
-import appCss from "../styles.css?url";
-import {
-  ShieldAlert,
   Zap,
+  TrendingUp,
   Briefcase,
-  Layers,
-  Home,
-  User,
   BookOpen,
-  Lock,
+  UserCheck,
+  Shield,
+  Clock,
+  Radio,
 } from "lucide-react";
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      {
-        charSet: "utf-8",
-      },
-      {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
-      },
-      {
-        title: "Capital Guard Shield",
-      },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
-  }),
-  component: RootComponent,
-  notFoundComponent: () => (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4 text-slate-300">
-      <ShieldAlert className="w-12 h-12 text-amber-400" />
-      <h2 className="text-xl font-black text-white">Route Not Found</h2>
-      <p className="text-xs text-slate-400 max-w-sm">
-        The requested screen does not exist. Return to Gateway or F&O Arena.
-      </p>
-      <Link
-        to="/arena"
-        className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs"
-      >
-        Go to F&O Arena
-      </Link>
-    </div>
-  ),
+  component: RootLayout,
 });
-
-function RootComponent() {
-  return (
-    <RootDocument>
-      <RootLayout />
-    </RootDocument>
-  );
-}
-
-function RootDocument({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en" className="dark">
-      <head>
-        <HeadContent />
-        {/* Tailwind CSS Engine */}
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              tailwind.config = {
-                darkMode: 'class',
-                theme: {
-                  extend: {
-                    colors: {
-                      brand: {
-                        50: '#fffbeb',
-                        500: '#f59e0b',
-                        600: '#d97706',
-                      }
-                    }
-                  }
-                }
-              }
-            `,
-          }}
-        />
-      </head>
-      <body className="bg-[#090d14] text-slate-100 min-h-screen font-sans antialiased">
-        {children}
-        <ScrollRestoration />
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootLayout() {
   const location = useLocation();
-  const currentPath = location.pathname;
+  const [istTime, setIstTime] = useState<string>("");
 
-  const navItems = [
-    { label: "F&O Arena", to: "/arena", icon: Zap },
-    { label: "Equity Delivery", to: "/equity", icon: Layers },
-    { label: "Unified Positions", to: "/position", icon: Briefcase },
-    { label: "Trade Journal", to: "/journal", icon: BookOpen },
-    { label: "Gateway & Risk Gate", to: "/", icon: Home },
-    { label: "Profile & Broker", to: "/profile", icon: User },
+  // Live IST Clock (UTC+5:30)
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      };
+      setIstTime(new Intl.DateTimeFormat("en-IN", options).format(now));
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const navLinks = [
+    { name: "F&O Arena", to: "/arena", icon: Zap, color: "text-amber-400" },
+    { name: "Equity Delivery", to: "/equity", icon: TrendingUp, color: "text-emerald-400" },
+    { name: "Unified Positions", to: "/position", icon: Briefcase, color: "text-blue-400" },
+    { name: "Trade Journal", to: "/journal", icon: BookOpen, color: "text-purple-400" },
+    { name: "Profile & Broker", to: "/profile", icon: UserCheck, color: "text-slate-300" },
   ];
 
   return (
-    <div className="min-h-screen bg-[#090d14] text-slate-100 flex flex-col md:flex-row antialiased">
+    <div className="min-h-screen bg-[#090d14] text-slate-100 flex flex-col md:flex-row antialiased selection:bg-amber-500 selection:text-slate-950 font-sans">
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-full md:w-64 bg-[#0e131d] border-r border-[#1c2333] flex flex-col justify-between shrink-0 p-4 space-y-6">
+      <aside className="w-full md:w-64 bg-[#0c111c] border-r border-[#1a2336] flex flex-col justify-between p-4 shrink-0">
         <div className="space-y-6">
-          {/* LOGO & BRAND */}
-          <Link to="/" className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <ShieldAlert className="w-5 h-5" />
+          {/* LOGO & BRAND HEADER */}
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20 overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="CapitalGuard Logo"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fallback icon if logo image is not found in public folder
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+              <Shield className="w-6 h-6 text-slate-950 block" />
             </div>
             <div>
-              <div className="text-sm font-black tracking-wider text-white">CAPITALGUARD</div>
-              <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Unbreachable Risk</div>
+              <div className="font-black text-sm tracking-wider text-white flex items-center gap-1.5">
+                CAPITALGUARD
+              </div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+                Unbreachable Risk
+              </div>
             </div>
-          </Link>
+          </div>
 
-          {/* NAV LINKS */}
-          <nav className="space-y-1.5">
-            {navItems.map((item) => {
+          {/* NAVIGATION LINKS */}
+          <nav className="space-y-1.5 pt-2">
+            {navLinks.map((item) => {
               const Icon = item.icon;
-              const isActive = currentPath === item.to;
-
+              const isActive = location.pathname === item.to || (item.to === "/arena" && location.pathname === "/");
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
-                      ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20"
-                      : "text-slate-400 hover:text-white hover:bg-[#161c28]"
+                      ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/10 font-black"
+                      : "text-slate-400 hover:text-slate-100 hover:bg-[#131a29]"
                   }`}
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <Icon className={`w-4 h-4 ${isActive ? "text-slate-950" : item.color}`} />
+                  <span>{item.name}</span>
                 </Link>
               );
             })}
           </nav>
         </div>
 
-        {/* QUICK SWITCH REALM HUD */}
-        <div className="p-3 rounded-2xl bg-[#090d14] border border-[#1b2333] space-y-2">
-          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            <span>Quick Switch</span>
-            <Lock className="w-3 h-3 text-amber-400" />
+        {/* BOTTOM WIDGET: LIVE IST CLOCK & BROKER STATUS */}
+        <div className="pt-4 border-t border-[#182133] space-y-2.5">
+          <div className="flex items-center justify-between px-2 text-[11px] font-bold text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <Clock className="w-3.5 h-3.5 text-amber-400" /> IST
+            </span>
+            <span className="font-mono text-slate-200">{istTime || "--:--:--"}</span>
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Link
-              to="/equity"
-              className={`py-1.5 text-center rounded-lg text-[11px] font-bold transition-all ${
-                currentPath === "/equity"
-                  ? "bg-emerald-500 text-slate-950 font-black"
-                  : "bg-[#151b26] text-slate-400 hover:text-white"
-              }`}
-            >
-              Equity
-            </Link>
-            <Link
-              to="/arena"
-              className={`py-1.5 text-center rounded-lg text-[11px] font-bold transition-all ${
-                currentPath === "/arena"
-                  ? "bg-amber-500 text-slate-950 font-black"
-                  : "bg-[#151b26] text-slate-400 hover:text-white"
-              }`}
-            >
-              Arena
-            </Link>
+
+          <div className="flex items-center justify-between px-2 text-[10px] font-bold">
+            <span className="text-slate-400">Angel SmartAPI</span>
+            <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              <Radio className="w-2.5 h-2.5 animate-pulse" /> Live
+            </span>
           </div>
         </div>
       </aside>
 
-      {/* MAIN VIEWPORT */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#090d14]">
         <Outlet />
       </main>
     </div>
