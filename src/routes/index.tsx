@@ -1,18 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
-  component: IndexRedirect,
+  component: () => <Navigate to="/arena" replace />,
 });
 
-function IndexRedirect() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    navigate({ to: "/arena", replace: true });
-  }, [navigate]);
-
-  return null;
-}
-
-export default IndexRedirect;
+export default Route;
