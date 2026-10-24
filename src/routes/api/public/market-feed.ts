@@ -148,13 +148,17 @@ async function login(apiKey: string, clientCode: string, pin: string, totpSecret
   return loginPromise;
 }
 
-async function fetchQuotes(apiKey: string, jwt: string): Promise<Quote[]> {
+async function fetchQuotes(
+  apiKey: string,
+  jwt: string,
+  exchangeTokens: Record<string, string[]> = { NSE: Object.keys(TOKENS) },
+): Promise<Quote[]> {
   const response = await fetch(
     "https://apiconnect.angelbroking.com/rest/secure/angelbroking/market/v1/quote",
     {
       method: "POST",
       headers: angelHeaders(apiKey, jwt),
-      body: JSON.stringify({ mode: "FULL", exchangeTokens: { NSE: Object.keys(TOKENS) } }),
+      body: JSON.stringify({ mode: "FULL", exchangeTokens }),
     },
   );
   const data = await readAngelJson<{
@@ -182,7 +186,21 @@ async function fetchQuotes(apiKey: string, jwt: string): Promise<Quote[]> {
 export const Route = createFileRoute("/api/public/market-feed")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        const url = new URL(request.url);
+        const exchange = url.searchParams.get("exchange");
+        const token = url.searchParams.get("token");
+        const isInstrumentQuote = exchange !== null || token !== null;
+        if (
+          isInstrumentQuote &&
+          ((!exchange || !token) || (exchange !== "NSE" && exchange !== "BSE") || !/^\d+$/.test(token))
+        ) {
+          return Response.json(
+            { status: "INVALID_REQUEST", message: "Provide a valid NSE/BSE exchange and numeric token." },
+            { status: 400, headers: { "cache-control": "no-store" } },
+          );
+        }
+
         const apiKey = process.env["ANGEL_API_KEY"];
         const clientCode = process.env["ANGEL_CLIENT_CODE"];
         const pin = process.env["ANGEL_PIN"];
@@ -202,6 +220,32 @@ export const Route = createFileRoute("/api/public/market-feed")({
         }
 
         try {
+          if (isInstrumentQuote && exchange && token) {
+            const fetchInstrumentQuote = async () => {
+              const jwt = await login(apiKey, clientCode, pin, totpSecret);
+              try {
+                return await fetchQuotes(apiKey, jwt, { [exchange]: [token] });
+              } catch (error) {
+                if (!(error instanceof Error) || !/401|unauthor|token|session/i.test(error.message)) {
+                  throw error;
+                }
+                angelSession = undefined;
+                return fetchQuotes(apiKey, await login(apiKey, clientCode, pin, totpSecret), {
+                  [exchange]: [token],
+                });
+              }
+            };
+            const quote = (await fetchInstrumentQuote())[0] ?? null;
+            return Response.json(
+              {
+                status: quote ? "LIVE_CONNECTED" : "NO_DATA",
+                timestamp: new Date().toISOString(),
+                quote,
+              },
+              { headers: { "cache-control": "no-store" } },
+            );
+          }
+
           if (quoteCache && quoteCache.expiresAt > Date.now()) {
             return Response.json(
               { status: "LIVE_CONNECTED", timestamp: quoteCache.timestamp, quotes: quoteCache.quotes },

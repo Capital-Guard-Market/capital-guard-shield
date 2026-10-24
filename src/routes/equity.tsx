@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Search,
@@ -43,31 +43,15 @@ interface StockItem {
   dayChangePct: number;
 }
 
-const STOCK_CATALOG: StockItem[] = [
-  { id: "NSE_RELIANCE", symbol: "RELIANCE", name: "Reliance Industries Ltd", token: "2885", exchange: "NSE", price: 2985.40, dayChangePct: 1.15 },
-  { id: "NSE_HDFCBANK", symbol: "HDFCBANK", name: "HDFC Bank Ltd", token: "1333", exchange: "NSE", price: 1642.30, dayChangePct: -0.45 },
-  { id: "NSE_ICICIBANK", symbol: "ICICIBANK", name: "ICICI Bank Ltd", token: "4963", exchange: "NSE", price: 1198.80, dayChangePct: 0.85 },
-  { id: "NSE_INFY", symbol: "INFY", name: "Infosys Ltd", token: "1594", exchange: "NSE", price: 1845.60, dayChangePct: -1.10 },
-  { id: "NSE_TCS", symbol: "TCS", name: "Tata Consultancy Services Ltd", token: "11536", exchange: "NSE", price: 4210.00, dayChangePct: 0.60 },
-  { id: "NSE_ITC", symbol: "ITC", name: "ITC Ltd", token: "1660", exchange: "NSE", price: 485.25, dayChangePct: 0.35 },
-  { id: "NSE_LT", symbol: "LT", name: "Larsen & Toubro Ltd", token: "11483", exchange: "NSE", price: 3620.00, dayChangePct: 1.40 },
-  { id: "NSE_SBIN", symbol: "SBIN", name: "State Bank of India", token: "3045", exchange: "NSE", price: 820.75, dayChangePct: 0.90 },
-  { id: "NSE_BHARTIARTL", symbol: "BHARTIARTL", name: "Bharti Airtel Ltd", token: "10604", exchange: "NSE", price: 1510.50, dayChangePct: 1.80 },
-  { id: "NSE_TATAMOTORS", symbol: "TATAMOTORS", name: "Tata Motors Ltd", token: "3456", exchange: "NSE", price: 985.60, dayChangePct: -0.80 },
-  { id: "NSE_TATASTEEL", symbol: "TATASTEEL", name: "Tata Steel Ltd", token: "3499", exchange: "NSE", price: 154.40, dayChangePct: 0.40 },
-  { id: "NSE_SUZLON", symbol: "SUZLON", name: "Suzlon Energy Ltd", token: "7172", exchange: "NSE", price: 78.50, dayChangePct: 2.30 },
-  { id: "BSE_532667", symbol: "SUZLON", name: "Suzlon Energy Ltd", token: "532667", exchange: "BSE", price: 78.45, dayChangePct: 2.25 },
-  { id: "NSE_IREDA", symbol: "IREDA", name: "Indian Renewable Energy Dev Agency", token: "20875", exchange: "NSE", price: 228.40, dayChangePct: 3.10 },
-  { id: "NSE_MAZDOCK", symbol: "MAZDOCK", name: "Mazagon Dock Shipbuilders Ltd", token: "2142", exchange: "NSE", price: 4320.00, dayChangePct: 1.75 },
-  { id: "NSE_ZOMATO", symbol: "ZOMATO", name: "Zomato Ltd", token: "5097", exchange: "NSE", price: 254.80, dayChangePct: 2.85 },
-  { id: "NSE_JIOFIN", symbol: "JIOFIN", name: "Jio Financial Services Ltd", token: "18143", exchange: "NSE", price: 332.40, dayChangePct: 0.75 },
-  { id: "NSE_TRENT", symbol: "TRENT", name: "Trent Ltd", token: "1964", exchange: "NSE", price: 6890.00, dayChangePct: 3.40 },
-  { id: "NSE_BEL", symbol: "BEL", name: "Bharat Electronics Ltd", token: "383", exchange: "NSE", price: 298.50, dayChangePct: 1.60 },
-  { id: "NSE_HAL", symbol: "HAL", name: "Hindustan Aeronautics Ltd", token: "2303", exchange: "NSE", price: 4720.00, dayChangePct: 2.20 },
-  { id: "BSE_500325", symbol: "RELIANCE", name: "Reliance Industries Ltd", token: "500325", exchange: "BSE", price: 2984.90, dayChangePct: 1.10 },
-  { id: "BSE_500180", symbol: "HDFCBANK", name: "HDFC Bank Ltd", token: "500180", exchange: "BSE", price: 1642.00, dayChangePct: -0.40 },
-  { id: "BSE_532540", symbol: "TCS", name: "Tata Consultancy Services Ltd", token: "532540", exchange: "BSE", price: 4210.00, dayChangePct: 0.60 },
-];
+const EMPTY_STOCK: StockItem = {
+  id: "",
+  symbol: "",
+  name: "",
+  token: "",
+  exchange: "NSE",
+  price: 0,
+  dayChangePct: 0,
+};
 
 const STORAGE_KEY = "capitalguard_equity_store_v2";
 
@@ -97,24 +81,113 @@ function savePortfolio(state: EquityPortfolioState) {
 export function EquityInvestmentsComponent() {
   const navigate = useNavigate();
   const [portfolio, setPortfolio] = useState<EquityPortfolioState>(loadPortfolio());
+  const [stockCatalog, setStockCatalog] = useState<StockItem[]>([]);
+  const [catalogStatus, setCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [quoteStatus, setQuoteStatus] = useState<"loading" | "live" | "unavailable">("loading");
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [exchangeFilter, setExchangeFilter] = useState<"ALL" | "NSE" | "BSE">("ALL");
 
-  const [selectedStock, setSelectedStock] = useState<StockItem>(STOCK_CATALOG[0]);
+  const [selectedStock, setSelectedStock] = useState<StockItem>(EMPTY_STOCK);
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [sharesQty, setSharesQty] = useState<number>(10);
   const [notification, setNotification] = useState<string | null>(null);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/public/equity-stocks", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Stock catalog request failed.");
+        return (await response.json()) as { stocks?: Omit<StockItem, "price" | "dayChangePct">[] };
+      })
+      .then((data) => {
+        const stocks = (data.stocks ?? []).map((stock) => ({ ...stock, price: 0, dayChangePct: 0 }));
+        if (!stocks.length) throw new Error("Stock catalog is empty.");
+        setStockCatalog(stocks);
+        setSelectedStock(stocks[0]);
+        setCatalogStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setCatalogStatus("error");
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedStock.token) return;
+
+    let isCurrent = true;
+    const controller = new AbortController();
+    setQuoteStatus("loading");
+
+    const updateQuote = async () => {
+      try {
+        const params = new URLSearchParams({ exchange: selectedStock.exchange, token: selectedStock.token });
+        const response = await fetch(`/api/public/market-feed?${params}`, { signal: controller.signal });
+        if (!response.ok) throw new Error("Quote request failed.");
+        const data = (await response.json()) as {
+          quote?: { ltp?: number; changePercent?: number } | null;
+        };
+        if (!isCurrent || !data.quote || !Number.isFinite(Number(data.quote.ltp)) || Number(data.quote.ltp) <= 0) {
+          if (isCurrent) setQuoteStatus("unavailable");
+          return;
+        }
+
+        const livePrice = Number(data.quote.ltp);
+        setSelectedStock((stock) =>
+          stock.id === selectedStock.id
+            ? { ...stock, price: livePrice, dayChangePct: Number(data.quote?.changePercent ?? 0) }
+            : stock,
+        );
+        setPortfolio((current) => {
+          const hasHolding = current.holdings.some(
+            (holding) => holding.symbol === selectedStock.symbol && holding.exchange === selectedStock.exchange,
+          );
+          if (!hasHolding) return current;
+
+          const updatedState = {
+            ...current,
+            holdings: current.holdings.map((holding) =>
+              holding.symbol === selectedStock.symbol && holding.exchange === selectedStock.exchange
+                ? { ...holding, currentPrice: livePrice }
+                : holding,
+            ),
+          };
+          savePortfolio(updatedState);
+          return updatedState;
+        });
+        setQuoteStatus("live");
+      } catch (error) {
+        if (isCurrent && !(error instanceof Error && error.name === "AbortError")) {
+          setQuoteStatus("unavailable");
+        }
+      }
+    };
+
+    void updateQuote();
+    const interval = window.setInterval(updateQuote, 15_000);
+    return () => {
+      isCurrent = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [selectedStock.id]);
+
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return STOCK_CATALOG.slice(0, 8);
+    if (!searchQuery.trim()) {
+      return stockCatalog
+        .filter((stock) => exchangeFilter === "ALL" || stock.exchange === exchangeFilter)
+        .slice(0, 8);
+    }
     const q = searchQuery.toLowerCase().trim();
-    return STOCK_CATALOG.filter((s) => {
+    return stockCatalog.filter((s) => {
       const matchExch = exchangeFilter === "ALL" || s.exchange === exchangeFilter;
       const matchQuery = s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
       return matchExch && matchQuery;
     });
-  }, [searchQuery, exchangeFilter]);
+  }, [stockCatalog, searchQuery, exchangeFilter]);
 
   const totalInvested = useMemo(() => {
     return portfolio.holdings.reduce((acc, h) => acc + h.totalInvested, 0);
@@ -127,14 +200,22 @@ export function EquityInvestmentsComponent() {
   const totalUnrealizedPnL = currentMarketValue - totalInvested;
   const totalPnLPct = totalInvested > 0 ? (totalUnrealizedPnL / totalInvested) * 100 : 0;
   const totalPortfolioWealth = portfolio.availableCash + currentMarketValue;
+  const selectedPriceLabel = selectedStock.price > 0
+    ? `₹${selectedStock.price.toFixed(2)}`
+    : quoteStatus === "loading"
+      ? "Loading quote..."
+      : "Quote unavailable";
 
   const totalOrderAmount = sharesQty * selectedStock.price;
-  const existingHolding = portfolio.holdings.find((h) => h.symbol === selectedStock.symbol);
-  const canBuy = portfolio.availableCash >= totalOrderAmount;
-  const canSell = existingHolding && existingHolding.qty >= sharesQty;
+  const existingHolding = portfolio.holdings.find(
+    (h) => h.symbol === selectedStock.symbol && h.exchange === selectedStock.exchange,
+  );
+  const canBuy = selectedStock.price > 0 && portfolio.availableCash >= totalOrderAmount;
+  const canSell = selectedStock.price > 0 && existingHolding && existingHolding.qty >= sharesQty;
 
   const handleSelectStock = (stock: StockItem) => {
     setSelectedStock(stock);
+    setQuoteStatus("loading");
     setSearchQuery("");
   };
 
@@ -149,7 +230,7 @@ export function EquityInvestmentsComponent() {
         const newAvg = newInvested / newQty;
 
         updatedHoldings = portfolio.holdings.map((h) =>
-          h.symbol === selectedStock.symbol
+          h.symbol === selectedStock.symbol && h.exchange === selectedStock.exchange
             ? { ...h, qty: newQty, avgBuyPrice: newAvg, totalInvested: newInvested, currentPrice: selectedStock.price }
             : h
         );
@@ -187,7 +268,7 @@ export function EquityInvestmentsComponent() {
         const remainingInvested = remainingQty * existingHolding.avgBuyPrice;
 
         updatedHoldings = portfolio.holdings.map((h) =>
-          h.symbol === selectedStock.symbol
+          h.symbol === selectedStock.symbol && h.exchange === selectedStock.exchange
             ? { ...h, qty: remainingQty, totalInvested: remainingInvested, currentPrice: selectedStock.price }
             : h
         );
@@ -296,6 +377,12 @@ export function EquityInvestmentsComponent() {
           </div>
         </div>
 
+        <div className={`text-xs ${catalogStatus === "error" ? "text-rose-400" : "text-slate-400"}`} role="status">
+          {catalogStatus === "loading" && "Loading NSE and BSE listings..."}
+          {catalogStatus === "error" && "Stock catalog is unavailable. Check the market data service and reload."}
+          {catalogStatus === "ready" && `${stockCatalog.length.toLocaleString("en-IN")} NSE and BSE listings loaded`}
+        </div>
+
         <div className="relative">
           <div className="flex items-center bg-[#151a23] border border-[#22283a] focus-within:border-emerald-500 rounded-2xl px-4 py-3 shadow-md transition-all">
             <Search className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
@@ -303,7 +390,7 @@ export function EquityInvestmentsComponent() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search stock across NSE & BSE (e.g. Suzlon, Reliance, IREDA, Tata Motors, TCS)..."
+              placeholder="Search stock symbol or company name..."
               className="w-full bg-transparent text-sm text-white placeholder-slate-500 font-medium focus:outline-none"
             />
             {searchQuery && (
@@ -346,13 +433,13 @@ export function EquityInvestmentsComponent() {
 
                     <div className="text-right">
                       <div className="text-xs font-black font-mono text-emerald-400">
-                        ₹{stock.price.toFixed(2)}
+                        {stock.price > 0 ? `₹${stock.price.toFixed(2)}` : "Live quote on select"}
                       </div>
-                      <div className={`text-[10px] font-bold ${
+                      {stock.price > 0 && <div className={`text-[10px] font-bold ${
                         stock.dayChangePct >= 0 ? "text-emerald-400" : "text-rose-400"
                       }`}>
                         {stock.dayChangePct >= 0 ? `+${stock.dayChangePct}%` : `${stock.dayChangePct}%`}
-                      </div>
+                      </div>}
                     </div>
                   </div>
                 ))
@@ -385,18 +472,23 @@ export function EquityInvestmentsComponent() {
                   </span>
                   <span className="text-xs font-bold text-slate-400 font-mono">Token: {selectedStock.token}</span>
                 </div>
-                <h2 className="text-2xl font-black text-white mt-1">{selectedStock.name}</h2>
-                <span className="text-xs font-bold text-slate-300 font-mono">Symbol: {selectedStock.symbol}</span>
+                <h2 className="text-2xl font-black text-white mt-1">
+                  {selectedStock.name || (catalogStatus === "loading" ? "Loading stock catalog..." : "Select a stock")}
+                </h2>
+                <span className="text-xs font-bold text-slate-300 font-mono">
+                  {selectedStock.symbol ? `Symbol: ${selectedStock.symbol}` : "Search to select an NSE or BSE listing"}
+                </span>
               </div>
 
               <div className="text-right">
-                <div className="text-2xl font-black text-emerald-400 font-mono">
-                  ₹{selectedStock.price.toFixed(2)}
-                </div>
-                <div className={`text-xs font-bold ${
-                  selectedStock.dayChangePct >= 0 ? "text-emerald-400" : "text-rose-400"
+                <div className="text-2xl font-black text-emerald-400 font-mono">{selectedPriceLabel}</div>
+                <div className={`text-xs font-bold ${selectedStock.price > 0
+                  ? selectedStock.dayChangePct >= 0 ? "text-emerald-400" : "text-rose-400"
+                  : "text-slate-400"
                 }`}>
-                  {selectedStock.dayChangePct >= 0 ? `+${selectedStock.dayChangePct}% Today` : `${selectedStock.dayChangePct}% Today`}
+                  {selectedStock.price > 0
+                    ? `${selectedStock.dayChangePct >= 0 ? "+" : ""}${selectedStock.dayChangePct}% Today`
+                    : quoteStatus === "loading" ? "Fetching live quote" : "Live quote unavailable"}
                 </div>
               </div>
             </div>
@@ -436,7 +528,7 @@ export function EquityInvestmentsComponent() {
         <div className="lg:col-span-5 bg-[#151a23] border border-[#22283a] rounded-2xl p-5 space-y-4">
           <div className="flex justify-between items-center border-b border-[#22283a] pb-3">
             <span className="text-xs font-black uppercase tracking-wider text-slate-300">CNC Delivery Ticket</span>
-            <span className="text-sm font-black font-mono text-emerald-400">₹{selectedStock.price.toFixed(2)}</span>
+            <span className="text-sm font-black font-mono text-emerald-400">{selectedPriceLabel}</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -489,12 +581,14 @@ export function EquityInvestmentsComponent() {
           <div className="space-y-2 pt-2 text-xs border-t border-[#22283a]">
             <div className="flex justify-between">
               <span className="text-slate-400">Price per Share:</span>
-              <span className="text-white font-bold font-mono">₹{selectedStock.price.toFixed(2)}</span>
+              <span className="text-white font-bold font-mono">{selectedPriceLabel}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Capital Required:</span>
               <span className="text-white font-black font-mono text-sm">
-                ₹{totalOrderAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                {selectedStock.price > 0
+                  ? `₹${totalOrderAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+                  : "—"}
               </span>
             </div>
             <div className="flex justify-between text-[11px] text-slate-400">
@@ -520,10 +614,14 @@ export function EquityInvestmentsComponent() {
             {orderSide === "BUY"
               ? canBuy
                 ? `Buy ${sharesQty} Shares of ${selectedStock.symbol} (${selectedStock.exchange})`
-                : "Insufficient Cash Balance"
+                : selectedStock.price <= 0
+                  ? quoteStatus === "loading" ? "Loading live quote..." : "Live quote unavailable"
+                  : "Insufficient Cash Balance"
               : canSell
               ? `Sell ${sharesQty} Shares of ${selectedStock.symbol} (${selectedStock.exchange})`
-              : "Insufficient Holding Qty"}
+              : selectedStock.price <= 0
+                ? quoteStatus === "loading" ? "Loading live quote..." : "Live quote unavailable"
+                : "Insufficient Holding Qty"}
           </button>
         </div>
       </div>
@@ -584,8 +682,8 @@ export function EquityInvestmentsComponent() {
                       <td className="py-3 text-right">
                         <button
                           onClick={() => {
-                            const found = STOCK_CATALOG.find((s) => s.symbol === h.symbol && s.exchange === h.exchange);
-                            if (found) setSelectedStock(found);
+                            const found = stockCatalog.find((s) => s.symbol === h.symbol && s.exchange === h.exchange);
+                            if (found) handleSelectStock(found);
                           }}
                           className="px-2.5 py-1 rounded-lg bg-[#252f42] hover:bg-emerald-600 text-slate-200 hover:text-white text-[11px] font-bold transition-colors"
                         >
